@@ -20,6 +20,9 @@ def create_app(config_name=None):
     jwt.init_app(app)
     cors.init_app(app, resources={r"/api/*": {"origins": "*"}})  # tighten origins before deploy
 
+    from . import models  # noqa: F401  — registers models with SQLAlchemy metadata
+
+
     from .routes.health_routes import health_bp
     app.register_blueprint(health_bp, url_prefix="/api/v1")
 
