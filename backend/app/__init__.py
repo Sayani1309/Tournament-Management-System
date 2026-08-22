@@ -1,13 +1,11 @@
-# backend/app/__init__.py
 import os
 from dotenv import load_dotenv
 load_dotenv()
-from flask import Flask
 
+from flask import Flask
 
 from .config import config_by_name
 from .extensions import db, migrate, jwt, cors
-
 
 
 def create_app(config_name=None):
@@ -22,8 +20,9 @@ def create_app(config_name=None):
 
     from . import models  # noqa: F401  — registers models with SQLAlchemy metadata
 
-
     from .routes.health_routes import health_bp
+    from .routes.auth_routes import auth_bp
     app.register_blueprint(health_bp, url_prefix="/api/v1")
+    app.register_blueprint(auth_bp, url_prefix="/api/v1")
 
     return app
