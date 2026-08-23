@@ -1,6 +1,6 @@
 from app.extensions import db
-from app.models import Match, MatchParticipant, MatchResult, MatchScore
-from app.constants.enums import MatchStatus, ResultType
+from app.models import Match, MatchParticipant, MatchResult, MatchScore, Tournament
+from app.constants.enums import MatchStatus, ResultType, TournamentFormat, TournamentStatus
 
 
 class ResultError(Exception):
@@ -18,10 +18,6 @@ def get_match_or_404(match_id: int) -> Match:
 
 
 def submit_result(match_id: int, scores: list, result_type: str, winner_participant_id: int = None) -> MatchResult:
-    """
-    scores: list of {"participant_id": int, "score": number}, exactly 2 entries,
-    matching the match's two MatchParticipant rows.
-    """
     match = get_match_or_404(match_id)
 
     if match.status == MatchStatus.COMPLETED:
@@ -72,12 +68,27 @@ def submit_result(match_id: int, scores: list, result_type: str, winner_particip
             db.session.add(MatchScore(match_participant_id=mp.id, score=entry["score"]))
 
         match.status = MatchStatus.COMPLETED
+        db.session.flush()
 
         from app.services.standings_service import update_standings_for_result
         scores_by_participant = {entry["participant_id"]: entry["score"] for entry in scores}
         update_standings_for_result(match, match_result, scores_by_participant)
 
-        # Phase 6 hook: knockout_service.advance_winner(match, match_result) for KNOCKOUT tournaments
+        tournament = db.session.get(Tournament, match.tournament_id)
+
+        if tournament.format == TournamentFormat.KNOCKOUT:
+            if match_result.winner_participant_id is not None:
+                from app.services.knockout_service import advance_winner
+                advance_winner(match, match_result.winner_participant_id)
+        elif tournament.format == TournamentFormat.ROUND_ROBIN:
+            db.session.flush()
+            remaining = Match.query.filter_by(
+                tournament_id=match.tournament_id, status=MatchStatus.SCHEDULED
+            ).count()
+            if remaining == 0:
+                from app.services.tournament_service import advance_lifecycle
+                advance_lifecycle(match.tournament_id, TournamentStatus.COMPLETED)
+
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -87,7 +98,7 @@ def submit_result(match_id: int, scores: list, result_type: str, winner_particip
 
 
 def get_match_result(match_id: int) -> MatchResult:
-    get_match_or_404(match_id)  # 404 if match itself doesn't exist
+    get_match_or_404(match_id)
     result = MatchResult.query.filter_by(match_id=match_id).first()
     if not result:
         raise ResultError("No result has been submitted for this match yet", status_code=404)

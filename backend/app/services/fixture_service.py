@@ -120,28 +120,36 @@ def generate_knockout_fixtures(tournament_id: int):
 
     bracket_size = _next_power_of_two(len(participant_ids))
     bye_count = bracket_size - len(participant_ids)
-    # bye_count is always < bracket_size // 2 (number of pairs), since bracket_size
-    # is the *smallest* power of two >= participant count — this guarantees no pair
-    # ever ends up with two byes.
 
     ids = list(participant_ids)
     matches = []
-    round_label = "Round 1"
+    slot_index = 0
     idx = 0
 
-    # Deterministic ordering: the first `bye_count` registered participants get
-    # an automatic bye into Round 2.
+    bye_matches = []  # (match, winner_participant_id) — advanced only after the full round exists
+
     for _ in range(bye_count):
         pid = ids[idx]
         idx += 1
-        matches.append(_create_bye_match(tournament_id, round_label, pid))
+        label = f"Round 1-Match {slot_index}"
+        bye_match = _create_bye_match(tournament_id, label, pid)
+        matches.append(bye_match)
+        bye_matches.append((bye_match, pid))
+        slot_index += 1
 
-    # Remaining participants paired up normally.
     while idx < len(ids):
         a = ids[idx]
         b = ids[idx + 1]
         idx += 2
-        matches.append(_create_match(tournament_id, round_label, [a, b]))
+        label = f"Round 1-Match {slot_index}"
+        matches.append(_create_match(tournament_id, label, [a, b]))
+        slot_index += 1
+
+    db.session.flush()  # ensure every Round 1 match exists before advancing any bye winner
+
+    from app.services.knockout_service import advance_winner
+    for bye_match, pid in bye_matches:
+        advance_winner(bye_match, pid)
 
     db.session.commit()
     return matches

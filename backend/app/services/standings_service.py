@@ -36,7 +36,7 @@ def update_standings_for_result(match, match_result, scores_by_participant: dict
         standing = _get_or_create_standing(tournament_id, participant_id)
 
         standing.played += 1
-        current_diff = standing.score_difference or 0
+        current_diff = float(standing.score_difference or 0)
         standing.score_difference = current_diff + (float(own_score) - float(opp_score))
 
         if match_result.result_type == ResultType.DRAW:
