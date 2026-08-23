@@ -20,3 +20,12 @@ class TournamentStatus(str, enum.Enum):
     REGISTRATION_OPEN = "REGISTRATION_OPEN"
     ONGOING = "ONGOING"
     COMPLETED = "COMPLETED"
+
+class MatchStatus(str, enum.Enum):
+    SCHEDULED = "SCHEDULED"
+    COMPLETED = "COMPLETED"
+
+
+class ResultType(str, enum.Enum):
+    WIN = "WIN"
+    DRAW = "DRAW"
