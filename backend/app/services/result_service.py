@@ -73,9 +73,11 @@ def submit_result(match_id: int, scores: list, result_type: str, winner_particip
 
         match.status = MatchStatus.COMPLETED
 
-        # Phase 5 hook: standings_service.update_standings_for_result(match, match_result, scores)
-        # Phase 6 hook: knockout_service.advance_winner(match, match_result) for KNOCKOUT tournaments
+        from app.services.standings_service import update_standings_for_result
+        scores_by_participant = {entry["participant_id"]: entry["score"] for entry in scores}
+        update_standings_for_result(match, match_result, scores_by_participant)
 
+        # Phase 6 hook: knockout_service.advance_winner(match, match_result) for KNOCKOUT tournaments
         db.session.commit()
     except Exception:
         db.session.rollback()

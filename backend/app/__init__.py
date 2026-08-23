@@ -26,6 +26,8 @@ def create_app(config_name=None):
     from .routes.venue_routes import venue_bp
     from .routes.participant_routes import participant_bp
     from .routes.match_routes import match_bp
+    from .routes.standings_routes import standings_bp
+    app.register_blueprint(standings_bp, url_prefix="/api/v1")
     app.register_blueprint(match_bp, url_prefix="/api/v1")
     app.register_blueprint(participant_bp, url_prefix="/api/v1")
     app.register_blueprint(health_bp, url_prefix="/api/v1")
