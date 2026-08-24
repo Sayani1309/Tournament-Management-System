@@ -44,3 +44,10 @@ All functional requirements (FR-01 through FR-07) and CR-001 are implemented and
   registration, fixtures, results entry, and standings display.
 - **Integration testing:** end-to-end manual/automated pass across both teammates'
   tracks together, beyond the unit/route-level tests already in place.
+
+## Polish / Integration / Frontend Progress
+
+- **P1 (Polish — §38, §39):** ✅ Complete. Full route-by-route error-handling audit
+  (all 6 route files) found no inconsistencies. Security checklist verified: `.env`
+  never committed, no `__pycache__` tracked, no hardcoded credentials, `SECRET_KEY`
+  fallback removed for consistency with `JWT_SECRET_KEY`. All 66 tests still passing.
