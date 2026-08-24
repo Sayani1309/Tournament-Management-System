@@ -35,6 +35,12 @@ Support two participation types — `TEAM` and `INDIVIDUAL` — and two tourname
 sport-specific branching in the fixture or scoring logic. See `docs/SRS.md` for the full
 requirements specification.
 
+## Backend Status
+
+**Complete.** All functional requirements (FR-01 through FR-07) and the guest-access
+change (CR-001) are implemented and covered by 66 automated tests. See
+`docs/traceability-matrix.md` for the full requirement-to-implementation mapping.
+
 ---
 
 ## Repository Structure
@@ -46,7 +52,7 @@ tournament-management-system/
 │   ├── app/
 │   │   ├── routes/       # HTTP endpoints (auth, tournament, venue, participant, match, standings)
 │   │   ├── models/       # SQLAlchemy models
-│   │   ├── services/     # Business logic (lifecycle rules, fixture generation, results, standings)
+│   │   ├── services/     # Business logic (lifecycle rules, fixture generation, results, standings, knockout)
 │   │   ├── schemas/      # Marshmallow request/response schemas
 │   │   ├── constants/    # Shared enums
 │   │   └── utils/
@@ -58,7 +64,7 @@ tournament-management-system/
     ├── SRS.md
     ├── change-log.md
     ├── traceability-matrix.md
-    └── diagrams/
+    └── diagrams/          # pending — see traceability-matrix.md
 ```
 
 ---
@@ -138,30 +144,54 @@ Always run from inside `backend/`:
 ```bash
 python -m pytest -v
 ```
+Expect all 66 tests to pass.
 
 ---
 
-## API Overview
+## API Reference
 
-Base path: `/api/v1`
+Base path: `/api/v1`. Governing rule (CR-001): **all `GET` endpoints are public; all
+`POST`/`PUT` endpoints require authentication, almost always with the ORGANIZER role.**
 
-| Area | Auth | Notes |
-|---|---|---|
-| `POST /auth/register`, `POST /auth/login` | Public | Anyone can register/log in |
-| `GET /auth/me` | JWT required | Returns the logged-in user's profile |
-| `GET /tournaments`, `GET /tournaments/{id}` | **Public** | Guests can browse without an account |
-| `POST /tournaments`, `PUT /tournaments/{id}` | Organizer only | |
-| `POST /tournaments/{id}/open-registration`, `POST /tournaments/{id}/start` | Organizer only | Lifecycle transitions |
-| `GET /venues` | **Public** | |
-| `POST /venues` | Organizer only | |
-| `GET /tournaments/{id}/participants` | **Public** | |
-| `POST /tournaments/{id}/participants` | Organizer only | |
-| `GET /tournaments/{id}/matches`, `GET /matches/{id}/result` | **Public** | |
-| `POST /tournaments/{id}/fixtures`, `POST /matches/{id}/result` | Organizer only | Result submission is organizer-only, not player-submitted |
-| `GET /tournaments/{id}/standings` | **Public** | |
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
+| `/auth/register` | POST | Public | |
+| `/auth/login` | POST | Public | Returns JWT |
+| `/auth/me` | GET | JWT required | Returns the logged-in user's profile |
+| `/tournaments` | GET | **Public** | List all tournaments |
+| `/tournaments/{id}` | GET | **Public** | Tournament detail |
+| `/tournaments` | POST | Organizer | Create tournament (starts in DRAFT) |
+| `/tournaments/{id}` | PUT | Organizer (owner only) | Locked once past DRAFT for `format`/`participant_type` |
+| `/tournaments/{id}/open-registration` | POST | Organizer (owner only) | DRAFT → REGISTRATION_OPEN |
+| `/tournaments/{id}/start` | POST | Organizer (owner only) | REGISTRATION_OPEN → ONGOING |
+| `/venues` | GET | **Public** | |
+| `/venues` | POST | Organizer | |
+| `/tournaments/{id}/participants` | GET | **Public** | |
+| `/tournaments/{id}/participants` | POST | Organizer | Register a team or player; requires REGISTRATION_OPEN and matching participant type |
+| `/tournaments/{id}/fixtures` | POST | Organizer | Generates round-robin or knockout matches; requires ONGOING; one-time only |
+| `/tournaments/{id}/matches` | GET | **Public** | |
+| `/matches/{id}/result` | POST | Organizer | Transactional; updates standings and, for knockout, advances the winner. Organizer-only — players never submit results. |
+| `/matches/{id}/result` | GET | **Public** | |
+| `/tournaments/{id}/standings` | GET | **Public** | Ordered: points desc → score difference desc → total score desc → name asc |
 
-See `docs/SRS.md` §37 for the complete specification and `docs/change-log.md` (CR-001)
-for the reasoning behind the public/organizer-only split.
+### Automatic tournament completion
+The tournament transitions to `COMPLETED` automatically — no explicit organizer
+action — once either: the knockout final's result is submitted, or the last scheduled
+round-robin match's result is submitted. See `docs/SRS.md` §11.
+
+### Standard error responses
+| Code | Meaning |
+|---|---|
+| 400 | Bad Request — invalid input, invalid lifecycle transition |
+| 401 | Unauthorized — missing/invalid JWT |
+| 403 | Forbidden — authenticated but wrong role, or not the owning organizer |
+| 404 | Not Found |
+| 409 | Conflict — duplicate registration, duplicate result, invalid state transition |
+| 500 | Internal Server Error |
+
+```json
+{ "error": "Team is already registered in this tournament" }
+```
 
 ---
 
@@ -182,4 +212,4 @@ for the reasoning behind the public/organizer-only split.
 - [`docs/SRS.md`](docs/SRS.md) — full requirements specification
 - [`docs/change-log.md`](docs/change-log.md) — record of requirement changes since baseline
 - [`docs/traceability-matrix.md`](docs/traceability-matrix.md) — requirement → design → implementation → test mapping
-- [`docs/diagrams/`](docs/diagrams/) — ER diagram, class diagram, sequence diagrams, activity diagrams (added once the full schema is finalized)
+- [`docs/diagrams/`](docs/diagrams/) — ER diagram, class diagram, sequence diagrams, activity diagrams (pending — next documentation task)
