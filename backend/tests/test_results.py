@@ -3,9 +3,10 @@ from app.models import Player, Match, MatchParticipant
 
 
 def register_and_login(client, email, role="ORGANIZER"):
-    client.post("/api/v1/auth/register", json={
-        "name": "U", "email": email, "password": "password123", "role": role,
-    })
+    payload = {"name": "U", "email": email, "password": "password123", "role": role}
+    if role == "PLAYER":
+        payload["participation_type"] = "INDIVIDUAL"
+    client.post("/api/v1/auth/register", json=payload)
     resp = client.post("/api/v1/auth/login", json={"email": email, "password": "password123"})
     return resp.json["access_token"]
 

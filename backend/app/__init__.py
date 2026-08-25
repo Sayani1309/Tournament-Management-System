@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
-from flask import Flask
+from flask import Flask, app
 
 from .config import config_by_name
 from .extensions import db, migrate, jwt, cors
@@ -27,6 +27,8 @@ def create_app(config_name=None):
     from .routes.participant_routes import participant_bp
     from .routes.match_routes import match_bp
     from .routes.standings_routes import standings_bp
+    from .routes.team_routes import team_bp
+    app.register_blueprint(team_bp, url_prefix="/api/v1")
     app.register_blueprint(standings_bp, url_prefix="/api/v1")
     app.register_blueprint(match_bp, url_prefix="/api/v1")
     app.register_blueprint(participant_bp, url_prefix="/api/v1")
