@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
 from marshmallow import ValidationError
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import get_jwt_identity
 
 from app.extensions import require_role
+from app.utils.pagination import paginate_query
 from app.schemas.tournament_schema import (
     TournamentCreateSchema, TournamentUpdateSchema, TournamentSchema,
 )
@@ -20,12 +21,12 @@ tournament_schema = TournamentSchema()
 tournaments_schema = TournamentSchema(many=True)
 
 
-# ---------- PUBLIC (guest-accessible, no login required) ----------
-
 @tournament_bp.route("/tournaments", methods=["GET"])
 def get_tournaments():
-    tournaments = list_tournaments()
-    return jsonify(tournaments_schema.dump(tournaments)), 200
+    query = list_tournaments()
+    result = paginate_query(query)
+    result["items"] = tournaments_schema.dump(result["items"])
+    return jsonify(result), 200
 
 
 @tournament_bp.route("/tournaments/<int:tournament_id>", methods=["GET"])
@@ -36,8 +37,6 @@ def get_tournament(tournament_id):
         return jsonify({"error": err.message}), err.status_code
     return jsonify(tournament_schema.dump(tournament)), 200
 
-
-# ---------- ORGANIZER-ONLY (write actions) ----------
 
 @tournament_bp.route("/tournaments", methods=["POST"])
 @require_role("ORGANIZER")

@@ -118,4 +118,4 @@ def advance_lifecycle(tournament_id: int, target_status: TournamentStatus, organ
 
 
 def list_tournaments():
-    return Tournament.query.order_by(Tournament.created_at.desc()).all()
+    return Tournament.query.order_by(Tournament.created_at.desc())

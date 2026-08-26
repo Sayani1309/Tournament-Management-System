@@ -5,8 +5,8 @@ class MatchParticipant(db.Model):
     __tablename__ = "match_participants"
 
     id = db.Column(db.Integer, primary_key=True)
-    match_id = db.Column(db.Integer, db.ForeignKey("matches.id"), nullable=False)
-    participant_id = db.Column(db.Integer, db.ForeignKey("participants.id"), nullable=False)
+    match_id = db.Column(db.Integer, db.ForeignKey("matches.id"), nullable=False, index=True)
+    participant_id = db.Column(db.Integer, db.ForeignKey("participants.id"), nullable=False, index=True)
 
     match = db.relationship("Match", foreign_keys=[match_id])
     participant = db.relationship("Participant", foreign_keys=[participant_id])

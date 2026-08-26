@@ -144,4 +144,4 @@ def test_guest_can_view_teams_without_login(client, app):
 
     resp = client.get("/api/v1/teams")
     assert resp.status_code == 200
-    assert any(t["name"] == "Public Team" for t in resp.json)
+    assert any(t["name"] == "Public Team" for t in resp.json["items"])

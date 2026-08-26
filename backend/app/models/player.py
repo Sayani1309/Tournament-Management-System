@@ -9,9 +9,9 @@ class Player(db.Model):
     email = db.Column(db.String(255), unique=True, nullable=True)
 
     user_id = db.Column(
-        db.Integer, db.ForeignKey("users.id"), unique=True, nullable=True
+        db.Integer, db.ForeignKey("users.id"), unique=True, nullable=True, index=True
     )
-    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True, index=True)
 
     user = db.relationship("User", back_populates="player", foreign_keys=[user_id])
     team = db.relationship("Team", back_populates="players", foreign_keys=[team_id])

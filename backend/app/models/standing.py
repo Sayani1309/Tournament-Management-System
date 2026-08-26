@@ -5,8 +5,8 @@ class Standing(db.Model):
     __tablename__ = "standings"
 
     id = db.Column(db.Integer, primary_key=True)
-    tournament_id = db.Column(db.Integer, db.ForeignKey("tournaments.id"), nullable=False)
-    participant_id = db.Column(db.Integer, db.ForeignKey("participants.id"), nullable=False)
+    tournament_id = db.Column(db.Integer, db.ForeignKey("tournaments.id"), nullable=False, index=True)
+    participant_id = db.Column(db.Integer, db.ForeignKey("participants.id"), nullable=False, index=True)
     played = db.Column(db.Integer, nullable=False, default=0)
     won = db.Column(db.Integer, nullable=False, default=0)
     drawn = db.Column(db.Integer, nullable=False, default=0)

@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL")
@@ -8,15 +9,22 @@ class Config:
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+    RATELIMIT_ENABLED = True
+
+
 class DevelopmentConfig(Config):
     DEBUG = True
 
+
 class TestingConfig(Config):
     TESTING = True
+    RATELIMIT_ENABLED = False  # disable during automated tests
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", Config.SQLALCHEMY_DATABASE_URI)
+
 
 class ProductionConfig(Config):
     DEBUG = False
+
 
 config_by_name = {
     "development": DevelopmentConfig,

@@ -9,7 +9,6 @@ class RegisterSchema(Schema):
     password = fields.Str(required=True, validate=validate.Length(min=8))
     role = fields.Str(required=True, validate=validate.OneOf([r.value for r in UserRole]))
 
-    # Only relevant when role == PLAYER
     participation_type = fields.Str(
         required=False, allow_none=True,
         validate=validate.OneOf([p.value for p in ParticipationType]),
@@ -45,8 +44,6 @@ class RegisterSchema(Schema):
                         "team_id is required when team_option is EXISTING", field_name="team_id"
                     )
         else:
-            # ORGANIZER (or any non-PLAYER role): must not include player/team fields at all —
-            # organizers never create Player or Team records.
             player_only_fields = ["participation_type", "team_option", "team_name", "team_id"]
             if any(data.get(f) for f in player_only_fields):
                 raise ValidationError(
@@ -59,9 +56,19 @@ class LoginSchema(Schema):
     password = fields.Str(required=True)
 
 
+class ForgotPasswordSchema(Schema):
+    email = fields.Email(required=True)
+
+
+class ResetPasswordSchema(Schema):
+    token = fields.Str(required=True)
+    new_password = fields.Str(required=True, validate=validate.Length(min=8))
+
+
 class UserSchema(Schema):
     id = fields.Int(dump_only=True)
     name = fields.Str()
     email = fields.Email()
     role = fields.Str()
+    is_verified = fields.Bool(dump_only=True)
     created_at = fields.DateTime(dump_only=True)

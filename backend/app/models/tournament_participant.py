@@ -7,8 +7,8 @@ class TournamentParticipant(db.Model):
     __tablename__ = "tournament_participants"
 
     id = db.Column(db.Integer, primary_key=True)
-    tournament_id = db.Column(db.Integer, db.ForeignKey("tournaments.id"), nullable=False)
-    participant_id = db.Column(db.Integer, db.ForeignKey("participants.id"), nullable=False)
+    tournament_id = db.Column(db.Integer, db.ForeignKey("tournaments.id"), nullable=False, index=True)
+    participant_id = db.Column(db.Integer, db.ForeignKey("participants.id"), nullable=False, index=True)
     registered_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,

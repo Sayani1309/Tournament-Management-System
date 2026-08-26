@@ -6,9 +6,9 @@ class Match(db.Model):
     __tablename__ = "matches"
 
     id = db.Column(db.Integer, primary_key=True)
-    tournament_id = db.Column(db.Integer, db.ForeignKey("tournaments.id"), nullable=False)
+    tournament_id = db.Column(db.Integer, db.ForeignKey("tournaments.id"), nullable=False, index=True)
     round = db.Column(db.String(50), nullable=False)
-    venue_id = db.Column(db.Integer, db.ForeignKey("venues.id"), nullable=True)
+    venue_id = db.Column(db.Integer, db.ForeignKey("venues.id"), nullable=True, index=True)
     scheduled_at = db.Column(db.DateTime(timezone=True), nullable=True)
     status = db.Column(
         db.Enum(MatchStatus, name="match_status"),

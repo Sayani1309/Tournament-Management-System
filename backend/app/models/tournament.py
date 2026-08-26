@@ -22,7 +22,7 @@ class Tournament(db.Model):
     )
     start_date = db.Column(db.Date, nullable=True)
     end_date = db.Column(db.Date, nullable=True)
-    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
     created_at = db.Column(
         db.DateTime(timezone=True),
         nullable=False,

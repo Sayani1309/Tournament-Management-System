@@ -3,6 +3,7 @@ from marshmallow import Schema, fields, ValidationError
 from flask_jwt_extended import get_jwt_identity, get_jwt
 
 from app.extensions import db, require_role
+from app.utils.pagination import paginate_query
 from app.models import Player, Team
 
 player_bp = Blueprint("player", __name__)
@@ -17,8 +18,9 @@ player_team_update_schema = PlayerTeamUpdateSchema()
 
 @player_bp.route("/players", methods=["GET"])
 def get_players():
-    players = Player.query.order_by(Player.name).all()
-    return jsonify([{"id": p.id, "name": p.name, "team_id": p.team_id} for p in players]), 200
+    result = paginate_query(Player.query.order_by(Player.name))
+    result["items"] = [{"id": p.id, "name": p.name, "team_id": p.team_id} for p in result["items"]]
+    return jsonify(result), 200
 
 
 @player_bp.route("/players/<int:player_id>", methods=["GET"])
@@ -32,8 +34,6 @@ def get_player(player_id):
 @player_bp.route("/players/<int:player_id>/team", methods=["PUT"])
 @require_role("ORGANIZER", "PLAYER")
 def update_player_team(player_id):
-    """Reassign a player's team (or remove them from a team entirely by passing
-    team_id: null). Either the player themself or an organizer can do this."""
     player = db.session.get(Player, player_id)
     if not player:
         return jsonify({"error": "Player not found"}), 404

@@ -7,8 +7,8 @@ class Participant(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.Enum(ParticipationType, name="participant_entity_type"), nullable=False)
-    player_id = db.Column(db.Integer, db.ForeignKey("players.id"), nullable=True)
-    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True)
+    player_id = db.Column(db.Integer, db.ForeignKey("players.id"), nullable=True, index=True)
+    team_id = db.Column(db.Integer, db.ForeignKey("teams.id"), nullable=True, index=True)
 
     player = db.relationship("Player", foreign_keys=[player_id])
     team = db.relationship("Team", foreign_keys=[team_id])

@@ -8,8 +8,8 @@ class MatchResult(db.Model):
     __tablename__ = "match_results"
 
     id = db.Column(db.Integer, primary_key=True)
-    match_id = db.Column(db.Integer, db.ForeignKey("matches.id"), unique=True, nullable=False)
-    winner_participant_id = db.Column(db.Integer, db.ForeignKey("participants.id"), nullable=True)
+    match_id = db.Column(db.Integer, db.ForeignKey("matches.id"), unique=True, nullable=False, index=True)
+    winner_participant_id = db.Column(db.Integer, db.ForeignKey("participants.id"), nullable=True, index=True)
     result_type = db.Column(db.Enum(ResultType, name="result_type"), nullable=False)
     submitted_at = db.Column(
         db.DateTime(timezone=True),

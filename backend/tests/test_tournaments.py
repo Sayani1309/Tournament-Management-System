@@ -25,7 +25,9 @@ def create_tournament_payload(**overrides):
 def test_guest_can_view_tournaments_without_login(client):
     resp = client.get("/api/v1/tournaments")
     assert resp.status_code == 200
-    assert isinstance(resp.json, list)
+    assert isinstance(resp.json, dict)
+    assert "items" in resp.json
+    assert isinstance(resp.json["items"],list)
 
 
 def test_create_tournament_requires_organizer(client):
