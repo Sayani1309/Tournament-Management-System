@@ -1,3 +1,5 @@
+from flask_jwt_extended import get_jwt_identity
+
 from flask import Blueprint, request, jsonify
 from marshmallow import ValidationError
 
@@ -21,8 +23,9 @@ result_schema = MatchResultSchema()
 @match_bp.route("/tournaments/<int:tournament_id>/fixtures", methods=["POST"])
 @require_role("ORGANIZER")
 def post_fixtures(tournament_id):
+    organizer_id = int(get_jwt_identity())
     try:
-        matches = generate_fixtures(tournament_id)
+        matches = generate_fixtures(tournament_id, organizer_id)
     except (FixtureError, TournamentError) as err:
         return jsonify({"error": err.message}), err.status_code
     return jsonify(matches_schema.dump(matches)), 201
@@ -47,9 +50,12 @@ def post_result(match_id):
     except ValidationError as err:
         return jsonify({"error": err.messages}), 400
 
+    organizer_id = int(get_jwt_identity())
+
     try:
         result = submit_result(
             match_id=match_id,
+            organizer_id=organizer_id,
             scores=data["scores"],
             result_type=data["result_type"],
             winner_participant_id=data.get("winner_participant_id"),

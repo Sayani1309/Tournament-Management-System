@@ -11,13 +11,19 @@ class ParticipantError(Exception):
         self.status_code = status_code
 
 
-def register_participant(tournament_id: int, player_id: int = None, team_id: int = None) -> TournamentParticipant:
+def register_participant(tournament_id: int, organizer_id: int, player_id: int = None, team_id: int = None) -> TournamentParticipant:
     if (player_id is None) == (team_id is None):
         # both None, or both provided — invalid either way
         raise ParticipantError("Exactly one of player_id or team_id must be provided")
 
     tournament = get_tournament_or_404(tournament_id)
 
+    if tournament.organizer_id != organizer_id:
+        raise ParticipantError(
+            "Only the owning organizer can register participants for this tournament",
+            status_code=403,
+        )
+    
     if tournament.status != TournamentStatus.REGISTRATION_OPEN:
         raise ParticipantError(
             "Registration is not open for this tournament", status_code=409

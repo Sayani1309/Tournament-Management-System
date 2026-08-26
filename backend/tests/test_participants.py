@@ -161,3 +161,26 @@ def test_registration_rejected_when_not_open(client, app):
         headers=auth_headers(token),
     )
     assert resp.status_code == 409
+
+def test_other_organizer_cannot_register_participants(client, app):
+    from app.extensions import db
+    from app.models import Player
+
+    token1 = register_and_login(client, "ownorg1@example.com", "ORGANIZER")
+    token2 = register_and_login(client, "ownorg2@example.com", "ORGANIZER")
+
+    tournament = create_tournament(client, token1, participant_type="INDIVIDUAL")
+    open_registration(client, token1, tournament["id"])
+
+    with app.app_context():
+        player = Player(name="Trespasser Target")
+        db.session.add(player)
+        db.session.commit()
+        player_id = player.id
+
+    resp = client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"player_id": player_id},
+        headers=auth_headers(token2),
+    )
+    assert resp.status_code == 403

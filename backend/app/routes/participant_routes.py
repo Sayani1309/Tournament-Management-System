@@ -1,3 +1,4 @@
+from flask_jwt_extended import get_jwt_identity
 from flask import Blueprint, request, jsonify
 from marshmallow import ValidationError
 
@@ -29,9 +30,11 @@ def post_participant(tournament_id):
         data = register_schema.load(request.get_json() or {})
     except ValidationError as err:
         return jsonify({"error": err.messages}), 400
+    
+    organizer_id = int(get_jwt_identity())
 
     try:
-        registration = register_participant(tournament_id=tournament_id, **data)
+        registration = register_participant(tournament_id=tournament_id,organizer_id=organizer_id, **data)
     except (ParticipantError, TournamentError) as err:
         return jsonify({"error": err.message}), err.status_code
 

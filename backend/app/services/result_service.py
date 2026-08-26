@@ -17,9 +17,16 @@ def get_match_or_404(match_id: int) -> Match:
     return match
 
 
-def submit_result(match_id: int, scores: list, result_type: str, winner_participant_id: int = None) -> MatchResult:
+def submit_result(match_id: int,organizer_id: int, scores: list, result_type: str, winner_participant_id: int = None) -> MatchResult:
     match = get_match_or_404(match_id)
 
+    tournament = db.session.get(Tournament, match.tournament_id)
+    if tournament.organizer_id != organizer_id:
+        raise ResultError(
+            "Only the owning organizer can submit results for this tournament",
+            status_code=403,
+        )
+    
     if match.status == MatchStatus.COMPLETED:
         raise ResultError("This match already has a submitted result", status_code=409)
 

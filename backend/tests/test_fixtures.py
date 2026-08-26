@@ -118,3 +118,10 @@ def test_cannot_generate_fixtures_twice(client, app):
     client.post(f"/api/v1/tournaments/{tid}/fixtures", headers=auth_headers(token))
     resp = client.post(f"/api/v1/tournaments/{tid}/fixtures", headers=auth_headers(token))
     assert resp.status_code == 409
+
+def test_other_organizer_cannot_generate_fixtures(client, app):
+    token, tid = setup_tournament_with_participants(client, app, 4)
+    other_token = register_and_login(client, "otherorg_fx@example.com")
+
+    resp = client.post(f"/api/v1/tournaments/{tid}/fixtures", headers=auth_headers(other_token))
+    assert resp.status_code == 403

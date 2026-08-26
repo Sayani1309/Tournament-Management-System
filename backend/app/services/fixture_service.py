@@ -156,9 +156,15 @@ def generate_knockout_fixtures(tournament_id: int):
 
 # ---------- Entry point ----------
 
-def generate_fixtures(tournament_id: int):
+def generate_fixtures(tournament_id: int, organizer_id: int):
     tournament = get_tournament_or_404(tournament_id)
-
+    
+    if tournament.organizer_id != organizer_id:
+        raise FixtureError(
+            "Only the owning organizer can generate fixtures for this tournament",
+            status_code=403,
+        )
+    
     if tournament.status != TournamentStatus.ONGOING:
         raise FixtureError(
             "Fixtures can only be generated once the tournament is ONGOING", status_code=409

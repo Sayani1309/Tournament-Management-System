@@ -180,3 +180,20 @@ def test_both_participants_scores_stored(client, app):
         assert all(s is not None for s in scores)
         stored_scores = sorted(float(s.score) for s in scores)
         assert stored_scores == [1.0, 3.0]
+
+def test_other_organizer_cannot_submit_result(client, app):
+    token, match_id, pids = setup_match(client, app, "ownres@example.com")
+    other_token = register_and_login(client, "otherorg_res@example.com")
+
+    resp = client.post(
+        f"/api/v1/matches/{match_id}/result",
+        json={
+            "result_type": "DRAW",
+            "scores": [
+                {"participant_id": pids[0], "score": 1},
+                {"participant_id": pids[1], "score": 1},
+            ],
+        },
+        headers=auth_headers(other_token),
+    )
+    assert resp.status_code == 403
