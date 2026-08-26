@@ -1,9 +1,21 @@
 from app.extensions import db
-from app.models import Participant, TournamentParticipant
+from app.models import Participant, TournamentParticipant, Player, Team
 from app.constants.enums import ParticipationType, TournamentStatus
 from app.services.tournament_service import get_tournament_or_404, TournamentError
 
-
+def get_participant_display(participant) -> dict:
+    """Returns {"id", "type", "name"} for a Participant — the name resolved from
+    the underlying Player or Team. Used anywhere a Participant needs to be shown
+    to a human instead of just a raw ID (match listings, results, standings)."""
+    if participant is None:
+        return {"id": None, "type": None, "name": None}
+    if participant.player_id is not None:
+        player = db.session.get(Player, participant.player_id)
+        return {"id": participant.id, "type": "INDIVIDUAL", "name": player.name if player else None}
+    if participant.team_id is not None:
+        team = db.session.get(Team, participant.team_id)
+        return {"id": participant.id, "type": "TEAM", "name": team.name if team else None}
+    return {"id": participant.id, "type": None, "name": None}
 class ParticipantError(Exception):
     def __init__(self, message, status_code=400):
         super().__init__(message)

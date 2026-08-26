@@ -144,3 +144,12 @@ def test_both_participants_updated_atomically(client, app):
     resp = client.get(f"/api/v1/tournaments/{tid}/standings")
     assert len(resp.json) == 2
     assert all(row["played"] == 1 for row in resp.json)
+
+def test_standings_show_all_participants_before_any_results(client, app):
+    token, tid, match_id, pids = setup_two_player_match(client, app, "stzero@example.com")
+    resp = client.get(f"/api/v1/tournaments/{tid}/standings")
+    assert resp.status_code == 200
+    assert len(resp.json) == 2
+    for row in resp.json:
+        assert row["played"] == 0
+        assert row["points"] == 0

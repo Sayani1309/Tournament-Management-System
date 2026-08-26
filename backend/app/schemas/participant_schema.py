@@ -11,9 +11,14 @@ class ParticipantSchema(Schema):
     type = fields.Method("get_type")
     player_id = fields.Int(allow_none=True)
     team_id = fields.Int(allow_none=True)
+    name = fields.Method("get_name")
 
     def get_type(self, obj):
         return obj.type.value
+
+    def get_name(self, obj):
+        from app.services.participant_service import get_participant_display
+        return get_participant_display(obj)["name"]
 
 
 class TournamentParticipantSchema(Schema):

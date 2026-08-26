@@ -125,3 +125,15 @@ def test_other_organizer_cannot_generate_fixtures(client, app):
 
     resp = client.post(f"/api/v1/tournaments/{tid}/fixtures", headers=auth_headers(other_token))
     assert resp.status_code == 403
+
+def test_matches_include_participant_names(client, app):
+    token, tid = setup_tournament_with_participants(client, app, 4)
+    client.post(f"/api/v1/tournaments/{tid}/fixtures", headers=auth_headers(token))
+
+    resp = client.get(f"/api/v1/tournaments/{tid}/matches")
+    assert resp.status_code == 200
+    for match in resp.json:
+        assert "participants" in match
+        assert len(match["participants"]) == 2
+        for p in match["participants"]:
+            assert p["name"] is not None

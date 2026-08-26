@@ -184,3 +184,27 @@ def test_other_organizer_cannot_register_participants(client, app):
         headers=auth_headers(token2),
     )
     assert resp.status_code == 403
+
+def test_participant_list_includes_names(client, app):
+    from app.extensions import db
+    from app.models import Player
+
+    token = register_and_login(client, "pname@example.com", "ORGANIZER")
+    tournament = create_tournament(client, token, participant_type="INDIVIDUAL")
+    open_registration(client, token, tournament["id"])
+
+    with app.app_context():
+        player = Player(name="Named Player")
+        db.session.add(player)
+        db.session.commit()
+        player_id = player.id
+
+    client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"player_id": player_id},
+        headers=auth_headers(token),
+    )
+
+    resp = client.get(f"/api/v1/tournaments/{tournament['id']}/participants")
+    assert resp.status_code == 200
+    assert resp.json[0]["participant"]["name"] == "Named Player"
