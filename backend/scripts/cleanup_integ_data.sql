@@ -1,0 +1,10 @@
+DELETE FROM standings;
+DELETE FROM match_scores;
+DELETE FROM match_results;
+DELETE FROM match_participants;
+DELETE FROM matches;
+DELETE FROM tournament_participants;
+DELETE FROM tournaments;
+DELETE FROM participants WHERE player_id IN (SELECT id FROM players WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'integA_%' OR email LIKE 'integB_%'));
+DELETE FROM players WHERE user_id IN (SELECT id FROM users WHERE email LIKE 'integA_%' OR email LIKE 'integB_%');
+DELETE FROM users WHERE email LIKE 'integA_%' OR email LIKE 'integB_%';
