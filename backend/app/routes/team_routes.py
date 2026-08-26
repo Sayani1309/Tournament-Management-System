@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify
 
 from app.utils.pagination import paginate_query
 from app.models import Team
+from app.extensions import db
 
 team_bp = Blueprint("team", __name__)
 
@@ -15,7 +16,7 @@ def get_teams():
 
 @team_bp.route("/teams/<int:team_id>", methods=["GET"])
 def get_team(team_id):
-    team = Team.query.get(team_id)
+    team = db.session.get(Team, team_id)
     if not team:
         return jsonify({"error": "Team not found"}), 404
     return jsonify({"id": team.id, "name": team.name}), 200

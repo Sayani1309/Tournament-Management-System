@@ -145,3 +145,40 @@ def test_guest_can_view_teams_without_login(client, app):
     resp = client.get("/api/v1/teams")
     assert resp.status_code == 200
     assert any(t["name"] == "Public Team" for t in resp.json["items"])
+
+def test_guest_can_view_single_player_without_login(client, app):
+    with app.app_context():
+        from app.extensions import db
+        from app.models import Player
+        player = Player(name="Solo Viewable Player")
+        db.session.add(player)
+        db.session.commit()
+        player_id = player.id
+
+    resp = client.get(f"/api/v1/players/{player_id}")
+    assert resp.status_code == 200
+    assert resp.json["name"] == "Solo Viewable Player"
+
+
+def test_get_nonexistent_player_returns_404(client):
+    resp = client.get("/api/v1/players/999999")
+    assert resp.status_code == 404
+
+
+def test_guest_can_view_single_team_without_login(client, app):
+    with app.app_context():
+        from app.extensions import db
+        from app.models import Team
+        team = Team(name="Viewable Team")
+        db.session.add(team)
+        db.session.commit()
+        team_id = team.id
+
+    resp = client.get(f"/api/v1/teams/{team_id}")
+    assert resp.status_code == 200
+    assert resp.json["name"] == "Viewable Team"
+
+
+def test_get_nonexistent_team_returns_404(client):
+    resp = client.get("/api/v1/teams/999999")
+    assert resp.status_code == 404
