@@ -16,7 +16,7 @@ def create_app(config_name=None):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    cors.init_app(app, resources={r"/api/*": {"origins": "*"}})  # tighten origins before deploy
+    cors.init_app(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}})
 
     from . import models  # noqa: F401  — registers models with SQLAlchemy metadata
 
@@ -28,6 +28,8 @@ def create_app(config_name=None):
     from .routes.match_routes import match_bp
     from .routes.standings_routes import standings_bp
     from .routes.team_routes import team_bp
+    from .routes.player_routes import player_bp
+    app.register_blueprint(player_bp, url_prefix="/api/v1")
     app.register_blueprint(team_bp, url_prefix="/api/v1")
     app.register_blueprint(standings_bp, url_prefix="/api/v1")
     app.register_blueprint(match_bp, url_prefix="/api/v1")

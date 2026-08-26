@@ -88,3 +88,27 @@ def list_participants(tournament_id: int):
         .order_by(TournamentParticipant.registered_at)
         .all()
     )
+
+def remove_participant(tournament_id: int, participant_id: int, organizer_id: int):
+    tournament = get_tournament_or_404(tournament_id)
+
+    if tournament.organizer_id != organizer_id:
+        raise ParticipantError(
+            "Only the owning organizer can remove participants from this tournament",
+            status_code=403,
+        )
+
+    if tournament.status not in (TournamentStatus.DRAFT, TournamentStatus.REGISTRATION_OPEN):
+        raise ParticipantError(
+            "Participants can only be removed before the tournament starts",
+            status_code=409,
+        )
+
+    registration = TournamentParticipant.query.filter_by(
+        tournament_id=tournament_id, participant_id=participant_id
+    ).first()
+    if not registration:
+        raise ParticipantError("This participant is not registered in this tournament", status_code=404)
+
+    db.session.delete(registration)
+    db.session.commit()

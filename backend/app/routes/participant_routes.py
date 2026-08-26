@@ -6,6 +6,7 @@ from app.extensions import require_role
 from app.schemas.participant_schema import ParticipantRegisterSchema, TournamentParticipantSchema
 from app.services.participant_service import register_participant, list_participants, ParticipantError
 from app.services.tournament_service import TournamentError
+from app.services.participant_service import remove_participant
 
 participant_bp = Blueprint("participant", __name__)
 
@@ -39,3 +40,13 @@ def post_participant(tournament_id):
         return jsonify({"error": err.message}), err.status_code
 
     return jsonify(tp_schema.dump(registration)), 201
+
+@participant_bp.route("/tournaments/<int:tournament_id>/participants/<int:participant_id>", methods=["DELETE"])
+@require_role("ORGANIZER")
+def delete_participant(tournament_id, participant_id):
+    organizer_id = int(get_jwt_identity())
+    try:
+        remove_participant(tournament_id, participant_id, organizer_id)
+    except ParticipantError as err:
+        return jsonify({"error": err.message}), err.status_code
+    return "", 204
