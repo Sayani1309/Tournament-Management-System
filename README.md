@@ -21,6 +21,7 @@ the format is round-robin or single-elimination knockout.
 - PostgreSQL (via `psycopg` v3)
 - Flask-Migrate / Alembic for schema migrations
 - Flask-JWT-Extended for authentication
+- Flask-Limiter for rate limiting
 - Marshmallow for request/response schema validation and serialization
 - Flask-CORS
 - PyTest for testing
@@ -37,9 +38,11 @@ requirements specification.
 
 ## Backend Status
 
-**Complete.** All functional requirements (FR-01 through FR-07) and the guest-access
-change (CR-001) are implemented and covered by 66 automated tests. See
-`docs/traceability-matrix.md` for the full requirement-to-implementation mapping.
+**Complete.** All functional requirements (FR-01–FR-07) and all three change requests
+(CR-001 guest access, CR-002 player self-registration, CR-003 auth hardening) are
+implemented, covered by 94 automated tests, and additionally verified through two
+manual end-to-end integration scenarios against the live API. See
+`docs/traceability.md` for the full requirement-to-implementation mapping.
 
 ---
 
@@ -50,21 +53,22 @@ tournament-management-system/
 ├── frontend/
 ├── backend/
 │   ├── app/
-│   │   ├── routes/       # HTTP endpoints (auth, tournament, venue, participant, match, standings)
+│   │   ├── routes/       # HTTP endpoints
 │   │   ├── models/       # SQLAlchemy models
-│   │   ├── services/     # Business logic (lifecycle rules, fixture generation, results, standings, knockout)
+│   │   ├── services/     # Business logic
 │   │   ├── schemas/      # Marshmallow request/response schemas
 │   │   ├── constants/    # Shared enums
-│   │   └── utils/
+│   │   └── utils/        # Pagination helper, etc.
 │   ├── tests/
+│   ├── scripts/          # Manual integration-test scripts (PowerShell + SQL)
 │   ├── migrations/
 │   ├── requirements.txt
 │   └── run.py
 └── docs/
     ├── SRS.md
     ├── change-log.md
-    ├── traceability-matrix.md
-    └── diagrams/          # pending — see traceability-matrix.md
+    ├── traceability.md
+    └── diagrams/          # pending — see traceability.md
 ```
 
 ---
@@ -96,16 +100,14 @@ pip install -r requirements.txt
 ```
 
 ### 5. Create the databases
-Two separate Postgres databases are required — one for development, one exclusively for
-the automated test suite (tests refuse to run against a non-test database as a safety
-guard):
 ```bash
 psql -U postgres -c "CREATE DATABASE tms_dev;"
 psql -U postgres -c "CREATE DATABASE tms_test;"
 ```
+Two separate databases are required — tests refuse to run against a non-test database
+as a safety guard (checked via `conftest.py`).
 
 ### 6. Configure environment variables
-Copy the example file and fill in your own values:
 ```bash
 cp .env.example .env
 ```
@@ -120,6 +122,7 @@ TEST_DATABASE_URL=postgresql+psycopg://postgres:your_password@localhost:5432/tms
 JWT_SECRET_KEY=<generated secret>
 SECRET_KEY=<a different generated secret>
 FLASK_ENV=development
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 `.env` is gitignored and must never be committed. `.env.example` is the committed
 template with placeholder values only.
@@ -133,60 +136,104 @@ flask --app run.py db upgrade
 ```bash
 flask --app run.py run
 ```
+For auto-reload on code changes during development:
+```bash
+flask --app run.py run --debug
+```
 Confirm it's up:
 ```bash
 curl http://localhost:5000/api/v1/health
 ```
-Should return `{"status": "ok"}`.
 
 ### 9. Run tests
 Always run from inside `backend/`:
 ```bash
 python -m pytest -v
 ```
-Expect all 66 tests to pass.
+Expect all 94 tests to pass.
+
+### 10. Manual integration test scripts (optional)
+`backend/scripts/scenario_a.ps1` (round-robin) and `scenario_b.ps1` (knockout) run a
+full lifecycle against the live server via real HTTP calls. `cleanup_integ_data.sql`
+removes the test data they create. Requires the server running in a separate terminal.
 
 ---
 
 ## API Reference
 
 Base path: `/api/v1`. Governing rule (CR-001): **all `GET` endpoints are public; all
-`POST`/`PUT` endpoints require authentication, almost always with the ORGANIZER role.**
+`POST`/`PUT`/`DELETE` endpoints require authentication**, almost always the ORGANIZER
+role, plus tournament ownership for tournament-scoped writes.
 
+### Auth
 | Endpoint | Method | Auth | Notes |
 |---|---|---|---|
-| `/auth/register` | POST | Public | |
-| `/auth/login` | POST | Public | Returns JWT |
-| `/auth/me` | GET | JWT required | Returns the logged-in user's profile |
-| `/tournaments` | GET | **Public** | List all tournaments |
-| `/tournaments/{id}` | GET | **Public** | Tournament detail |
-| `/tournaments` | POST | Organizer | Create tournament (starts in DRAFT) |
-| `/tournaments/{id}` | PUT | Organizer (owner only) | Locked once past DRAFT for `format`/`participant_type` |
-| `/tournaments/{id}/open-registration` | POST | Organizer (owner only) | DRAFT → REGISTRATION_OPEN |
-| `/tournaments/{id}/start` | POST | Organizer (owner only) | REGISTRATION_OPEN → ONGOING |
+| `/auth/register` | POST | Public, rate-limited 20/min | See registration rules below |
+| `/auth/login` | POST | Public, rate-limited 5/min | Returns JWT |
+| `/auth/logout` | POST | JWT required | Revokes the current token |
+| `/auth/me` | GET | JWT required | Logged-in user's profile |
+| `/auth/forgot-password` | POST | Public | Dev mode returns `dev_token` |
+| `/auth/reset-password` | POST | Public | |
+| `/auth/verify-email` | GET | Public (`?token=`) | |
+
+**Registration rules:** `role=ORGANIZER` accepts only name/email/password/role.
+`role=PLAYER` additionally requires `participation_type` (`INDIVIDUAL`/`TEAM`); if
+`TEAM`, also `team_option` (`NEW` + `team_name`, or `EXISTING` + `team_id`). A `Player`
+record is created automatically; organizers never create Player/Team records.
+
+### Tournaments
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
+| `/tournaments` | GET | **Public** | Paginated (`?page=&per_page=`) |
+| `/tournaments/{id}` | GET | **Public** | |
+| `/tournaments` | POST | Organizer | Starts in DRAFT |
+| `/tournaments/{id}` | PUT | Organizer (owner) | Locked fields after DRAFT |
+| `/tournaments/{id}/open-registration` | POST | Organizer (owner) | DRAFT → REGISTRATION_OPEN |
+| `/tournaments/{id}/start` | POST | Organizer (owner) | REGISTRATION_OPEN → ONGOING |
+
+### Venues, Players, Teams
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
 | `/venues` | GET | **Public** | |
 | `/venues` | POST | Organizer | |
+| `/players` | GET | **Public** | Paginated |
+| `/players/{id}` | GET | **Public** | |
+| `/players/{id}/team` | PUT | Player (self) or Organizer | Set `team_id: null` to leave a team |
+| `/teams` | GET | **Public** | Paginated |
+| `/teams/{id}` | GET | **Public** | |
+
+### Participants, Fixtures, Results, Standings
+| Endpoint | Method | Auth | Notes |
+|---|---|---|---|
 | `/tournaments/{id}/participants` | GET | **Public** | |
-| `/tournaments/{id}/participants` | POST | Organizer | Register a team or player; requires REGISTRATION_OPEN and matching participant type |
-| `/tournaments/{id}/fixtures` | POST | Organizer | Generates round-robin or knockout matches; requires ONGOING; one-time only |
-| `/tournaments/{id}/matches` | GET | **Public** | |
-| `/matches/{id}/result` | POST | Organizer | Transactional; updates standings and, for knockout, advances the winner. Organizer-only — players never submit results. |
+| `/tournaments/{id}/participants` | POST | Organizer (owner) | Requires REGISTRATION_OPEN |
+| `/tournaments/{id}/participants/{pid}` | DELETE | Organizer (owner) | Only before ONGOING |
+| `/tournaments/{id}/fixtures` | POST | Organizer (owner) | Requires ONGOING; one-time |
+| `/tournaments/{id}/matches` | GET | **Public** | Includes participant names |
+| `/matches/{id}/result` | POST | Organizer (owner) | Transactional; organizer-only, no player path |
 | `/matches/{id}/result` | GET | **Public** | |
-| `/tournaments/{id}/standings` | GET | **Public** | Ordered: points desc → score difference desc → total score desc → name asc |
+| `/tournaments/{id}/standings` | GET | **Public** | Ordered: points → score diff → total score → name |
 
 ### Automatic tournament completion
 The tournament transitions to `COMPLETED` automatically — no explicit organizer
 action — once either: the knockout final's result is submitted, or the last scheduled
-round-robin match's result is submitted. See `docs/SRS.md` §11.
+round-robin match's result is submitted.
+
+### Pagination response shape
+`GET /tournaments`, `GET /players`, `GET /teams` return:
+```json
+{ "items": [...], "page": 1, "per_page": 20, "total": 42, "total_pages": 3 }
+```
 
 ### Standard error responses
 | Code | Meaning |
 |---|---|
-| 400 | Bad Request — invalid input, invalid lifecycle transition |
-| 401 | Unauthorized — missing/invalid JWT |
-| 403 | Forbidden — authenticated but wrong role, or not the owning organizer |
+| 400 | Bad Request |
+| 401 | Unauthorized |
+| 403 | Forbidden (wrong role, or not the owning organizer) |
 | 404 | Not Found |
-| 409 | Conflict — duplicate registration, duplicate result, invalid state transition |
+| 409 | Conflict |
+| 429 | Too Many Requests (rate limit) |
 | 500 | Internal Server Error |
 
 ```json
@@ -195,15 +242,28 @@ round-robin match's result is submitted. See `docs/SRS.md` §11.
 
 ---
 
+## Known Limitations (documented, not defects)
+
+- Rate limiting uses in-memory storage — resets on restart, not multi-process safe.
+  Fine for this project's scope; would use Redis in a real deployment.
+- Password reset and email verification tokens are exposed directly in API responses
+  only when `FLASK_ENV=development`, since no SMTP provider is configured. Must never
+  be enabled in production.
+- Email verification is tracked (`is_verified`) but not enforced — unverified accounts
+  can still log in and use the system.
+
+---
+
 ## Contributing (team workflow)
 
-- Branching: feature branches merged into `main` via review where practical
 - Never commit `.env` — verify with `git status` before every commit
 - Shared files requiring coordination before editing: `app/constants/enums.py`,
   `app/models/__init__.py`, `app/__init__.py`
-- Update `docs/traceability-matrix.md` when a feature's implementation and tests are
-  both complete, not at the end of the project
+- Update `docs/traceability.md` when a feature's implementation and tests are both
+  complete, not at the end of the project
 - Log any requirement change in `docs/change-log.md` before implementing it
+- The dev server does not hot-reload by default — restart it (or run with `--debug`)
+  after changing backend code before testing manually
 
 ---
 
@@ -211,5 +271,5 @@ round-robin match's result is submitted. See `docs/SRS.md` §11.
 
 - [`docs/SRS.md`](docs/SRS.md) — full requirements specification
 - [`docs/change-log.md`](docs/change-log.md) — record of requirement changes since baseline
-- [`docs/traceability-matrix.md`](docs/traceability-matrix.md) — requirement → design → implementation → test mapping
+- [`docs/traceability.md`](docs/traceability.md) — requirement → design → implementation → test mapping
 - [`docs/diagrams/`](docs/diagrams/) — ER diagram, class diagram, sequence diagrams, activity diagrams (pending — next documentation task)

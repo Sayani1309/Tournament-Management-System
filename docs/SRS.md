@@ -2,7 +2,7 @@
 ## Tournament Management System (TMS)
 
 **Status:** Baselined. Changes tracked in `docs/change-log.md`.
-**Last updated:** 2026-08-23 (incorporates CR-001)
+**Last updated:** 2026-08-26 (incorporates CR-001, CR-002, CR-003)
 
 ---
 
@@ -16,17 +16,18 @@ managing, and viewing tournaments across both team-based and individual sports.
 ### 1.2 Scope
 TMS supports two participation types (`TEAM`, `INDIVIDUAL`) and two tournament formats
 (`ROUND_ROBIN`, `KNOCKOUT`) as independent dimensions, without sport-specific branching
-in fixture generation or scoring logic. The same domain model supports football,
-cricket, chess, badminton, or any comparable competition.
+in fixture generation or scoring logic. `sport` is a free-text descriptive field on
+Tournament with no fixed list — the backend places no restriction on its value.
 
 ### 1.3 Out of Scope
-- Swiss-system tournaments
-- Double round-robin
-- Double elimination
-- Third-place matches
-- Advanced sport-specific scoring (e.g. football penalty shootouts, chess-specific
-  tiebreak systems)
+- Swiss-system tournaments, double round-robin, double elimination, third-place matches
+- Advanced sport-specific scoring (e.g. football penalty shootouts)
 - Live scoring, notifications, chat, payments, AI features, mobile application
+- Account lockout after failed logins (rate limiting provides baseline brute-force
+  protection instead — see §13)
+- Real SMTP email delivery (development-mode token exposure used instead — see §9.3, §9.4)
+- Pagination on tournament-scoped lists (participants, matches, standings) — naturally
+  bounded by tournament size
 
 These may be documented as future enhancements but are not implemented in this version.
 
@@ -34,34 +35,42 @@ These may be documented as future enhancements but are not implemented in this v
 
 ## 2. Actors
 
-### 2.1 Guest *(added by CR-001)*
+### 2.1 Guest *(CR-001)*
 An unauthenticated visitor. Can, without logging in or registering:
 - view the list of tournaments and tournament details
-- view registered participants
+- view registered participants, teams, and players
 - view fixtures/matches
 - view match results
 - view standings
 
-Cannot perform any write action — cannot create a tournament, register as a
-participant, submit results, or perform any organizer function.
+Cannot perform any write action.
 
-### 2.2 Player
+### 2.2 Player *(registration flow updated by CR-002)*
 Everything a Guest can do, plus, once registered and logged in:
-- register as a tournament participant (individually or as part of a team)
+- register their own `Player` profile as part of account registration (see §7.1)
+- update their own team affiliation (`PUT /players/{id}/team`)
 - view their own profile (`GET /auth/me`)
+- log out (revokes their current session token — see §9.2)
+- request a password reset if forgotten
 
 ### 2.3 Organizer
 Everything a Guest can do, plus, once registered and logged in:
-- create tournaments
-- configure tournaments (subject to lifecycle rules, §6)
+- create tournaments; configure tournaments (subject to lifecycle rules, §6)
 - open/close registration
-- manage participants
+- register participants; remove a participant before the tournament starts
 - generate fixtures
 - submit match results
 - manage knockout progression
+- update any player's team affiliation
 
-Organizer-only operations are enforced via role-based authorization on top of JWT
-authentication, not authentication alone.
+**Organizers cannot create `Player` or `Team` records** — that only happens through
+Player self-registration (§7.1). This is enforced at the schema-validation level;
+including player/team fields on an Organizer registration returns `400`.
+
+Organizer-only operations are enforced via role-based authorization (`require_role`)
+on top of JWT authentication, and — for tournament-scoped write actions — an
+additional ownership check confirming the authenticated organizer is the one who
+created that specific tournament (see §6.2).
 
 ---
 
@@ -73,11 +82,8 @@ ParticipationType
     INDIVIDUAL
 ```
 
-**TEAM** — a team participates as a unit (e.g. football: Team A vs Team B). Players may
-optionally belong to a team.
-
-**INDIVIDUAL** — an individual player participates directly (e.g. chess: Player A vs
-Player B). No team is involved.
+**TEAM** — a team participates as a unit. Players may optionally belong to a team.
+**INDIVIDUAL** — an individual player participates directly. No team is involved.
 
 `participation_type` and `format` (§4) are independent, orthogonal fields on a
 Tournament — never inferred from `sport`.
@@ -91,9 +97,6 @@ TournamentFormat
     ROUND_ROBIN
     KNOCKOUT
 ```
-
-The fixture service selects generation logic based on `format`, never on `sport`
-(§10.6, Sport Independence).
 
 ---
 
@@ -120,13 +123,16 @@ Tournament
   │           └── winner_participant_id → Participant (nullable)
   └── Standing (0..N)
         └── Participant
+
+User
+  ├── PasswordResetToken (0..N)
+  └── EmailVerificationToken (0..N)
 ```
 
 The **Participant** entity is the central generic abstraction: it represents whoever
 actually competes, and is exactly one Player or exactly one Team, never both, never
 neither. This allows Match, MatchResult, MatchScore, and Standing to all reference
-`Participant` generically, so the same schema supports both team sports and individual
-sports without duplication.
+`Participant` generically.
 
 ---
 
@@ -143,36 +149,92 @@ DRAFT → REGISTRATION_OPEN → ONGOING → COMPLETED
 | ONGOING | COMPLETED |
 | COMPLETED | *(none — terminal)* |
 
-No skipping (e.g. `DRAFT → ONGOING` is invalid) and no reverse transitions (e.g.
-`ONGOING → DRAFT` is invalid). The service layer rejects any transition not in this
-table.
+No skipping and no reverse transitions. The service layer rejects any transition not in
+this table.
 
-**DRAFT** — organizer configures the tournament; participants cannot register yet.
-**REGISTRATION_OPEN** — eligible teams or players can register.
-**ONGOING** — registration is closed; fixtures are generated; matches can be played and
-results submitted. Entered via an explicit organizer action
-(`POST /tournaments/{id}/start`).
-**COMPLETED** — all required matches are finished. The tournament becomes read-only.
-Entered either via explicit organizer action (future) or automatically once the final
-knockout match or last round-robin match concludes (§11).
+**DRAFT** → **REGISTRATION_OPEN** → **ONGOING**: entered via explicit organizer action.
+**COMPLETED**: entered automatically once the final knockout match or the last
+scheduled round-robin match's result is submitted (§11).
 
 ### 6.1 Configuration Locking
 Before `REGISTRATION_OPEN`: organizer may freely edit `name`, `description`, `sport`,
-`participant_type`, `format`, `start_date`, `end_date`, venue associations (via Match).
+`participant_type`, `format`, `start_date`, `end_date`.
 
-Once `REGISTRATION_OPEN` or later: `participant_type` and `format` are locked and
-cannot be changed. Attempting to do so returns `409 Conflict`.
+Once `REGISTRATION_OPEN` or later: `participant_type` and `format` are locked
+(`409 Conflict` if changed).
 
-Once `ONGOING`: participants cannot be added through normal operations; fixtures cannot
-be arbitrarily changed; completed matches cannot be modified through normal operations.
+Once `ONGOING`: participants cannot be added through normal operations (only removable
+before `ONGOING` — see §7.3); fixtures cannot be arbitrarily changed; completed matches
+cannot be modified through normal operations.
 
 Once `COMPLETED`: the tournament is fully read-only.
 
+### 6.2 Ownership Enforcement
+
+Every write operation scoped to a specific tournament — participant registration,
+participant removal, fixture generation, result submission, and all lifecycle/CRUD
+operations on the Tournament itself — verifies that the authenticated organizer is the
+**same organizer who created that tournament** (`tournament.organizer_id == authenticated_user_id`).
+An organizer authenticated with a valid ORGANIZER-role token cannot manage a tournament
+they do not own; such attempts return `403 Forbidden`.
+
 ---
 
-## 7. Data Model
+## 7. Registration & Account Model *(CR-002)*
 
-### 7.1 User
+### 7.1 Player Self-Registration
+
+`POST /auth/register` with `role=PLAYER` requires additional fields:
+
+```
+participation_type: INDIVIDUAL | TEAM   (required)
+
+If participation_type = TEAM:
+  team_option: NEW | EXISTING            (required)
+  If team_option = NEW:
+    team_name: string                    (required)
+  If team_option = EXISTING:
+    team_id: integer                     (required)
+```
+
+On success, a `Player` row is created automatically, linked to the new `User` via
+`user_id`. If `participation_type = TEAM`, the `Player` is also linked to the
+specified team — either a newly created `Team` (rejecting duplicate names with `409`)
+or an existing one (rejecting an invalid ID with `404`).
+
+A `Player` can later change or remove their team affiliation via
+`PUT /players/{id}/team` (self-service, or by an Organizer on any player's behalf —
+see §7.4).
+
+### 7.2 Organizer Registration
+
+`POST /auth/register` with `role=ORGANIZER` accepts only `name`, `email`, `password`,
+`role`. Including any of `participation_type`, `team_option`, `team_name`, `team_id`
+is rejected with `400` — organizers never create Player or Team records.
+
+### 7.3 Participant Removal
+
+`DELETE /tournaments/{id}/participants/{participant_id}` — organizer-only (owning
+organizer), permitted only while the tournament is `DRAFT` or `REGISTRATION_OPEN`.
+Returns `409` if attempted once the tournament is `ONGOING` or `COMPLETED`.
+
+### 7.4 Player-Team Update
+
+`PUT /players/{id}/team` — either the Player themself (verified via their own
+`user_id`) or any Organizer may reassign a player's `team_id`, including setting it
+to `null` to remove them from a team entirely. A Player attempting to update another
+player's team affiliation receives `403`.
+
+---
+
+## 8. Data Model
+
+*(Unchanged from the frozen database design — see the Frozen DB Design document for
+full column-level detail on Player, Team, Tournament, Participant,
+TournamentParticipant, Venue, Match, MatchParticipant, MatchResult, MatchScore, and
+Standing. One column was added under CR-003, shown below.)*
+
+### 8.1 User
 | Column | Type | Constraint |
 |---|---|---|
 | id | Integer | PK |
@@ -180,288 +242,198 @@ Once `COMPLETED`: the tournament is fully read-only.
 | email | String | UNIQUE, NOT NULL |
 | password_hash | String | NOT NULL |
 | role | Enum(ORGANIZER, PLAYER) | NOT NULL |
+| is_verified | Boolean | NOT NULL, default False *(CR-003)* |
 | created_at | DateTime | NOT NULL |
-
-Passwords are never stored as plaintext.
-
-### 7.2 Player
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| name | String | NOT NULL |
-| email | String | UNIQUE, nullable |
-| user_id | Integer | FK → User.id, nullable, UNIQUE |
-| team_id | Integer | FK → Team.id, nullable |
-
-`team_id` is nullable — a chess player needs no team. `user_id` is nullable — a
-participant does not strictly need a separate login account to be registered, though a
-Player who logs in must be linked to a User.
-
-### 7.3 Team
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| name | String | UNIQUE, NOT NULL |
-| created_at | DateTime | NOT NULL |
-
-### 7.4 Tournament
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| name | String | NOT NULL |
-| description | Text | nullable |
-| sport | String | NOT NULL |
-| format | Enum(ROUND_ROBIN, KNOCKOUT) | NOT NULL |
-| participant_type | Enum(TEAM, INDIVIDUAL) | NOT NULL |
-| status | Enum(DRAFT, REGISTRATION_OPEN, ONGOING, COMPLETED) | NOT NULL |
-| start_date | Date | nullable |
-| end_date | Date | nullable |
-| organizer_id | Integer | FK → User.id |
-| created_at | DateTime | NOT NULL |
-
-No `venue_id` on Tournament — venue is associated per-Match, not per-Tournament, since
-a tournament may use multiple venues across its matches.
-
-### 7.5 Participant
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| type | Enum(TEAM, INDIVIDUAL) | NOT NULL |
-| player_id | Integer | FK → Player.id, nullable |
-| team_id | Integer | FK → Team.id, nullable |
-
-**Invariant:** `type = INDIVIDUAL` requires `player_id IS NOT NULL AND team_id IS NULL`.
-`type = TEAM` requires `team_id IS NOT NULL AND player_id IS NULL`. Enforced at the
-service layer, and via database CHECK constraint where practical.
-
-### 7.6 TournamentParticipant
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| tournament_id | Integer | FK → Tournament.id |
-| participant_id | Integer | FK → Participant.id |
-| registered_at | DateTime | NOT NULL |
-
-`UNIQUE(tournament_id, participant_id)` — prevents duplicate registration.
-
-Registration is only permitted while `Tournament.status = REGISTRATION_OPEN`, and only
-for the Participant `type` matching `Tournament.participant_type`.
-
-### 7.7 Venue
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| name | String | UNIQUE, NOT NULL |
-| location | String | NOT NULL |
-| capacity | Integer | nullable, CHECK ≥ 0 |
-
-There is no concept of home/away venue.
-
-### 7.8 Match
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| tournament_id | Integer | FK → Tournament.id |
-| round | String/Integer | NOT NULL |
-| venue_id | Integer | FK → Venue.id, nullable |
-| scheduled_at | DateTime | nullable |
-| status | Enum(SCHEDULED, COMPLETED) | NOT NULL |
-
-No `home_team_id`/`away_team_id` and no `participant_a_id`/`participant_b_id` columns.
-Participants attach via MatchParticipant (§7.9).
-
-### 7.9 MatchParticipant
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| match_id | Integer | FK → Match.id |
-| participant_id | Integer | FK → Participant.id |
-
-`UNIQUE(match_id, participant_id)`. Every match has exactly two MatchParticipant rows.
-Both participants must belong to the same tournament as the match, must match the
-tournament's `participant_type`, and must be different from each other.
-
-### 7.10 MatchResult
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| match_id | Integer | FK → Match.id, UNIQUE |
-| winner_participant_id | Integer | FK → Participant.id, nullable |
-| result_type | Enum(WIN, DRAW) | NOT NULL |
-| submitted_at | DateTime | NOT NULL |
-
-`result_type = WIN` requires `winner_participant_id IS NOT NULL`.
-`result_type = DRAW` requires `winner_participant_id IS NULL`.
-`winner_participant_id`, when set, must be one of the match's two participants.
-One result per match (`UNIQUE(match_id)`); a completed match cannot receive another
-result through normal operations.
-
-### 7.11 MatchScore
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| match_participant_id | Integer | FK → MatchParticipant.id, UNIQUE |
-| score | Decimal/Integer | NOT NULL |
-
-References MatchParticipant rather than Match+Participant directly, which makes it
-structurally impossible to record a score for a participant who isn't actually in that
-match.
-
-### 7.12 Standing
-| Column | Type | Constraint |
-|---|---|---|
-| id | Integer | PK |
-| tournament_id | Integer | FK → Tournament.id |
-| participant_id | Integer | FK → Participant.id |
-| played | Integer | NOT NULL, ≥ 0 |
-| won | Integer | NOT NULL, ≥ 0 |
-| drawn | Integer | NOT NULL, ≥ 0 |
-| lost | Integer | NOT NULL, ≥ 0 |
-| points | Integer | NOT NULL, ≥ 0 |
-| score_difference | Decimal/Integer | nullable |
-
-`UNIQUE(tournament_id, participant_id)`. `played = won + drawn + lost`. References
-Participant, not Team — so the same table supports both team standings (football) and
-individual standings (chess).
 
 ---
 
-## 8. Functional Requirements
+## 9. Authentication & Account Management *(CR-003)*
 
-| ID | Requirement |
+### 9.1 Passwords
+Hashed via `werkzeug.security`, never stored or compared as plaintext.
+
+### 9.2 Logout / Token Revocation
+
+`POST /auth/logout` (requires valid JWT) — records the token's `jti` (JWT ID) and its
+original `exp` (expiry) in a `TokenBlocklist` table. Subsequent requests presenting a
+blocklisted token are rejected as unauthenticated, even though the token has not
+naturally expired yet. Blocklist entries store `expires_at` so that entries for
+tokens which have since expired naturally can be safely purged (not currently
+scheduled automatically — see §13 non-functional notes).
+
+### 9.3 Password Reset
+
+```
+POST /auth/forgot-password  { email }
+  -> generates a PasswordResetToken (30-minute TTL)
+  -> invalidates any previously issued, still-unused tokens for that user
+  -> in development mode only, returns the raw token in the response body
+     (dev_token field) since no SMTP provider is configured; production
+     would email it instead and never expose it via the API
+
+POST /auth/reset-password  { token, new_password }
+  -> validates token is unused and unexpired
+  -> updates password_hash
+  -> marks token used
+```
+
+### 9.4 Email Verification
+
+`User.is_verified` (boolean, default `false`) is set via:
+
+```
+GET /auth/verify-email?token=...
+```
+
+An `EmailVerificationToken` (48-hour TTL) is generated automatically at registration
+time. In development mode, the token is returned in the registration response
+(`dev_verification_token`) for the same reason as §9.3. **Verification is tracked but
+not enforced** — an unverified user can still log in and use the system normally. This
+is a deliberate scope decision for the current version; enforcing verified-only login
+is a documented possible future enhancement.
+
+### 9.5 Rate Limiting
+
+| Endpoint | Limit |
 |---|---|
-| FR-01 | Users can register and log in; passwords are securely hashed; sessions use JWT. |
-| FR-02 | Organizers can create and configure tournaments; tournament lifecycle transitions follow the state machine in §6. |
-| CR-001 | Guests (unauthenticated) can view tournaments, participants, fixtures, results, and standings without logging in. |
-| FR-03 | Organizers can register participants (teams or individuals, matching the tournament's participant type) while registration is open. |
-| FR-04 | The system generates round-robin or knockout fixtures based on the tournament's format, including bye handling for non-power-of-two knockout brackets and odd-count round-robins. |
-| FR-05 | Organizers submit match results transactionally; a valid result updates the match status, records scores, and updates standings/progression atomically. |
-| FR-06 | The system computes and displays standings for round-robin tournaments, ordered deterministically. |
-| FR-07 | The system manages knockout progression: match winners advance automatically to the next round; the final's winner is the champion. |
+| `POST /auth/login` | 5 per minute per IP |
+| `POST /auth/register` | 20 per minute per IP |
+
+Disabled automatically in the test configuration to avoid interference with the
+automated test suite. Uses in-memory storage (see §13 non-functional notes).
 
 ---
 
-## 9. Match Results — Draws and Winners
+## 10. Match Results — Draws and Winners
 
 For round-robin tournaments, equal scores produce a draw (`result_type = DRAW`,
 `winner_participant_id = NULL`). For knockout tournaments, a completed match must
-produce a winner — the initial implementation requires a sport-neutral tie-break
-mechanism to be supplied when scores are equal, without implementing sport-specific
-rules (e.g. football penalties, chess tiebreak systems) unless explicitly scoped in
-later.
+produce a winner.
 
-**Result submission is organizer-only.** Players do not submit their own match results
-under any configuration (confirmed as part of CR-001 discussion — no player-submission
-path exists or is planned).
+**Result submission is organizer-only**, with the owning-organizer check from §6.2
+applied. Players do not submit their own match results under any configuration.
 
 ---
 
-## 10. Fixture Generation Rules
+## 11. Fixture Generation & Match Result Transaction
 
-### 10.1 Round-Robin
-For N participants, every participant plays every other participant once:
-`N(N-1)/2` matches for even N. For odd N, one participant receives a bye each required
-round. No self-pairing, no duplicate pairing.
+### 11.1 Round-Robin
+For N participants: `N(N-1)/2` matches for even N; odd N gets a bye per round via the
+circle method. No self-pairing, no duplicate pairing.
 
-### 10.2 Round-Robin Standings Rules
-Points: Win = 3, Draw = 1, Loss = 0.
-`score_difference = total score for − total score against`.
+### 11.2 Round-Robin Standings
+Win = 3 points, Draw = 1, Loss = 0. `score_difference = total for - total against`.
+Ordering: points desc, then score difference desc, then total score desc, then name
+asc. Every registered participant appears in standings with zero values from the
+moment fixtures exist, not only once they've played their first match.
 
-### 10.3 Standings Ordering
-1. Points, descending
-2. Score difference, descending
-3. Total score, descending
-4. Participant name, ascending
+### 11.3 Knockout — Bracket Sizing & Byes
+Bracket size = smallest power of two >= participant count. Byes assigned to the first
+N registered participants deterministically; a bye is represented as an immediately
+`COMPLETED` single-participant match with a `MatchResult` already recorded, so
+downstream progression logic treats byes and real wins identically.
 
-### 10.4 Knockout — Bracket Sizing
-Bracket size is the smallest power of two ≥ participant count (e.g. 7 participants →
-8-slot bracket with 1 bye; 5 participants → 8-slot bracket with 3 byes). Byes are
-assigned via deterministic bracket ordering; advanced seeding is out of scope.
+### 11.4 Knockout — Progression
+A match winner advances automatically to the next round's corresponding slot. Final's
+winner = champion; no third-place match.
 
-### 10.5 Knockout — Progression
-A match winner advances automatically to the corresponding slot in the next round.
-Knockout tournaments do not use league standings as their primary progression
-mechanism. The final's winner is the champion; no third-place match is generated.
-
-### 10.6 Sport Independence
-The fixture service branches on `participant_type` and `format` only — never on
-`sport`. `sport` is descriptive metadata.
-
----
-
-## 11. Match Result Transaction
-
-Result submission is transactional:
+### 11.5 Transaction & Automatic Completion
 
 ```
-Validate Match → Validate Scores → Create MatchResult → Create MatchScore rows →
-Update Match.status = COMPLETED → Update Standings / Progression → COMMIT
+Validate Match -> Validate Scores -> Create MatchResult -> Create MatchScore rows ->
+Update Match.status = COMPLETED -> Update Standings / Progression -> COMMIT
 ```
 
-Any failure triggers a full ROLLBACK, preventing a saved result with stale standings.
+Any failure triggers full ROLLBACK. When a knockout final concludes, or the last
+scheduled round-robin match completes, the tournament automatically transitions to
+`COMPLETED` — a system-triggered transition, not requiring explicit organizer action.
 
-When a knockout final concludes, or the last scheduled round-robin match completes, the
-tournament automatically transitions to `COMPLETED` via the same lifecycle rules
-defined in §6 (this is a system-triggered transition, distinct from the
-organizer-triggered `REGISTRATION_OPEN`/`ONGOING` transitions).
+### 11.6 Sport Independence
+Fixture generation branches on `participant_type` and `format` only, never on `sport`.
 
 ---
 
 ## 12. API Summary
 
-Base path: `/api/v1`. Full endpoint list and auth requirements are in `README.md`
-(kept there rather than duplicated, since it must stay in sync with the actual routes).
-The governing rule, per CR-001: **all `GET` endpoints are public; all `POST`/`PUT`
-endpoints require authentication and, in almost all cases, the ORGANIZER role.**
+Base path: `/api/v1`. Governing rule (CR-001): **all `GET` endpoints are public; all
+`POST`/`PUT`/`DELETE` endpoints require authentication**, almost always requiring the
+ORGANIZER role plus tournament ownership where applicable (§6.2). Full endpoint list
+maintained in `README.md`.
+
+**Pagination** (CR-003): `GET /tournaments`, `GET /players`, `GET /teams` return
+`{"items": [...], "page", "per_page", "total", "total_pages"}` rather than a bare
+array. All other list endpoints are unpaginated.
 
 ### Standard error responses
 | Code | Meaning |
 |---|---|
-| 400 | Bad Request — invalid input, invalid lifecycle transition |
-| 401 | Unauthorized — missing/invalid JWT |
-| 403 | Forbidden — authenticated but wrong role, or not the owning organizer |
+| 400 | Bad Request - invalid input, invalid lifecycle transition |
+| 401 | Unauthorized - missing/invalid/revoked JWT |
+| 403 | Forbidden - wrong role, or not the owning organizer |
 | 404 | Not Found |
-| 409 | Conflict — duplicate registration, duplicate result, invalid state transition |
+| 409 | Conflict - duplicate registration, duplicate result, invalid state transition |
+| 429 | Too Many Requests - rate limit exceeded (§9.5) |
 | 500 | Internal Server Error |
 
-Response body on error:
-```json
-{ "error": "Team is already registered in this tournament" }
-```
+Response body: `{ "error": "<message>" }`
 
 ---
 
 ## 13. Non-Functional Requirements
 
-- **Security:** passwords hashed, never plaintext; JWT secret from environment
-  variables; `.env` never committed; database credentials never hardcoded; all
-  organizer-only routes protected by role-based authorization, not authentication alone.
-- **Data Integrity:** all multi-step writes (e.g. result submission) are transactional
-  with rollback on failure. Uniqueness constraints enforced at the database level
-  (`UNIQUE(tournament_id, participant_id)`, `UNIQUE(match_id)`, etc.) in addition to
-  service-level validation.
-- **Extensibility:** sport-agnostic domain model — adding a new sport requires no
-  changes to fixture, scoring, or progression logic, only new `sport` metadata values.
+- **Security:** passwords hashed; JWT secret from environment variables with no
+  fallback default; `.env` never committed; CORS restricted to an explicit origin
+  allowlist (`CORS_ORIGINS` env var) rather than wide open; all organizer-only routes
+  protected by role-based authorization plus, where applicable, ownership verification.
+- **Data Integrity:** multi-step writes are transactional with rollback on failure.
+  Uniqueness enforced at the database level in addition to service-level validation.
+  Explicit indexes declared on all foreign-key columns.
+- **Extensibility:** sport-agnostic domain model.
+- **Known limitations (documented, not defects):**
+  - Rate limiting uses in-memory storage — resets on server restart and would not
+    function correctly across multiple server processes. Acceptable for this
+    project's single-process deployment scope; a production deployment would use a
+    shared store (e.g. Redis).
+  - Token blocklist entries are not automatically purged on a schedule; a
+    `TokenBlocklist.purge_expired()` utility exists but must be invoked manually or
+    via a future maintenance job.
+  - Email verification and password reset tokens are exposed directly in API
+    responses in development mode only, since no SMTP provider is configured. This
+    must never be enabled in a production deployment.
 
 ---
 
 ## 14. Architecture
 
 ```
-React Frontend → REST API → Routes/Controllers → Services → SQLAlchemy Models → PostgreSQL
+React Frontend -> REST API -> Routes/Controllers -> Services -> SQLAlchemy Models -> PostgreSQL
 ```
 
-Business logic resides in the service layer, not directly in route functions. Routes
-handle HTTP concerns, authentication, authorization, and request validation, then
-delegate to services for tournament rules, lifecycle, participant registration, fixture
-generation, result processing, standings, and knockout progression.
+Business logic resides in the service layer, not in route functions.
 
 ---
 
-## 15. Change History
+## 15. Testing Summary
 
-See `docs/change-log.md` for the full record. Summary:
+- **94 automated tests** (pytest), covering models, services, and routes across every
+  functional requirement, change request, and hardening fix.
+- **2 manual end-to-end integration scenarios** run against the live API (documented in
+  `backend/scripts/scenario_a.ps1`, `scenario_b.ps1`): a full round-robin lifecycle and
+  a full knockout lifecycle including byes, verifying behavior no unit test can, since
+  it exercises the complete chain of real HTTP requests, real database state, and
+  real timing (e.g., automatic tournament completion) together.
+- Integration testing surfaced three defects invisible to unit testing (a missing FK
+  cascade, an overly strict rate limit, and a broken migration downgrade) — see
+  `docs/change-log.md` CR-003 addendum and `docs/traceability.md` for details.
+
+---
+
+## 16. Change History
+
+See `docs/change-log.md` for full detail.
 
 | CR | Summary | Status |
 |---|---|---|
-| CR-001 | Added Guest actor with public read access to all tournament data | Approved, implemented |
+| CR-001 | Guest actor with public read access | Approved, implemented |
+| CR-002 | Player self-registration with team creation/joining | Approved, implemented |
+| CR-003 | Auth hardening (logout, password reset, email verification), pagination, rate limiting | Approved, implemented |

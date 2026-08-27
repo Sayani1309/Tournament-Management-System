@@ -1,67 +1,102 @@
 # Change Log
 
 This log records requirement changes made after the initial baseline (per SRS §5's
-change-management process: Requirement Change → Change Record → SRS Update → Affected
-Design Artifacts → Implementation → Tests). Every entry here should have a corresponding
-update in `docs/SRS.md`.
+change-management process). Every entry here has a corresponding update in `docs/SRS.md`.
 
 ---
 
-## CR-001 — Public read access for guests (unauthenticated visitors)
+## CR-003 — Auth hardening and pagination
 
-**Date raised:** 2026-08-23
-**Raised during:** Backend Phase 3 (Tournament CRUD implementation)
-**Requested by:** Team decision (both members)
+**Date:** 2026-08-26
+**Reason:** Gaps identified during a full codebase review: no logout/token revocation,
+no password reset, no email verification, unbounded list endpoints, no rate limiting
+on auth endpoints.
 
-### Original requirement
-The initial SRS (§6) defined only two actors: **Organizer** and **Player**. All
-functionality, including viewing tournaments, fixtures, results, and standings, was
-implicitly assumed to require an authenticated session under one of these two roles.
+**Added:**
+- JWT logout via server-side token blocklist (`TokenBlocklist`, keyed by `jti`, storing
+  `expires_at` for future cleanup of naturally-expired entries)
+- Password reset flow (`POST /auth/forgot-password`, `POST /auth/reset-password`) —
+  previously issued unused tokens are invalidated when a new one is requested.
+  Development mode exposes the raw token in the API response since no SMTP provider is
+  configured; production would email it instead.
+- Email verification (`is_verified` field on `User`, `GET /auth/verify-email`) — tracked
+  but **not enforced**; login does not require a verified account. Same dev-only token
+  exposure pattern as password reset.
+- Rate limiting on `/auth/login` (5/minute) and `/auth/register` (initially 5/minute,
+  see addendum below)
+- Pagination on `GET /tournaments`, `GET /players`, `GET /teams` — the only system-wide
+  unbounded lists. Tournament-scoped lists (participants, matches, standings) remain
+  unpaginated by design, since they're naturally capped by tournament size.
 
-### New requirement
-A third actor, **Guest**, is introduced. A Guest is any unauthenticated visitor. Guests
-can view all read-only tournament data without creating an account or logging in:
-- tournaments (list and detail)
-- participants
-- fixtures / matches
-- match results
-- standings
+**Explicitly out of scope:** account lockout after failed logins, real SMTP integration,
+pagination on tournament-scoped endpoints.
 
-Guests cannot perform any write action: they cannot create tournaments, register as a
-participant, submit results, or perform any organizer function. To do any of these, a
-visitor must register and log in as either a Player or an Organizer.
+**Response shape change:** `GET /tournaments`, `GET /players`, `GET /teams` now return
+`{"items": [...], "page": N, "per_page": N, "total": N, "total_pages": N}` instead of a
+bare array.
 
-### Reason
-Improves accessibility and matches how most real-world tournament platforms behave —
-browsing should not require an account; only participation or organization should.
+**Status:** Approved and implemented.
 
-### Affected SRS sections
-- §6 (Actors) — new "Guest" actor added
-- §37 (API) — clarifies that all `GET` endpoints are public; only `POST`/`PUT` endpoints
-  require authentication and role authorization
+### Addendum (discovered during P2 integration testing, 2026-08-26)
 
-### Affected design/implementation
-- All `GET` routes across every blueprint (`tournament_routes.py`, `venue_routes.py`, and
-  Teammate B's `participant_routes.py`, `match_routes.py`, `standings_routes.py`) carry
-  **no** `@jwt_required()` or `@require_role()` decorator.
-- All `POST`/`PUT` routes remain protected with `@require_role("ORGANIZER")` (or, where
-  applicable in future, `@require_role("ORGANIZER", "PLAYER")`).
-- Confirmed as part of this change: match result submission is **organizer-only** with no
-  player-submission path, consistent with the original SRS §6 listing of "submit match
-  results" solely under Organizer.
-
-### Status
-**Approved and implemented.** Landed starting with Backend Phase 3 (Tournament and Venue
-routes). Applies retroactively as a design rule to all subsequent routes built by either
-teammate.
-
-### Verification
-Covered by guest-access test cases in `test_tournaments.py` (e.g.
-`test_guest_can_view_tournaments_without_login`,
-`test_guest_can_view_single_tournament`) and equivalent tests required in Teammate B's
-`test_participants.py`, `test_fixtures.py`, `test_results.py`, and `test_standings.py`.
+Manual end-to-end testing of a realistic bulk-registration workflow (an organizer
+registering several players in quick succession) hit the 5/minute rate limit on
+`/auth/register`, which is unrealistically tight for that use case. **Register limit
+raised to 20/minute.** `/auth/login` remains at 5/minute, since brute-force protection
+on a single account's password is the actual threat model there, not bulk registration.
 
 ---
 
-*Add new entries above this line, in reverse chronological order (newest at top), as
-future changes arise.*
+## CR-002 — Player self-registration with team creation/joining
+
+**Date:** 2026-08-24
+**Reason:** The original registration flow (`POST /auth/register`) only created a
+`User` row. There was no way to create a `Player` or `Team` record through the API at
+all — every test and manual workflow had to insert them directly via SQLAlchemy,
+bypassing the API entirely. This meant a real user could never actually register as a
+tournament participant through the system as built.
+
+**Clarified registration model** (three-tier, as specified by the team):
+1. **Guests** — browse everything, no account required (see CR-001).
+2. **Players** — register via `POST /auth/register` with `role=PLAYER`. Must also
+   specify `participation_type` (`INDIVIDUAL` or `TEAM`). If `TEAM`, must specify
+   `team_option` (`NEW`, with a `team_name`, or `EXISTING`, with a `team_id`). A
+   `Player` row is created automatically and linked to the new `User`, and to a `Team`
+   if applicable.
+3. **Organizers** — register via `POST /auth/register` with `role=ORGANIZER`. Cannot
+   include any player/team fields — rejected with `400` if they do. Organizers never
+   create `Player` or `Team` records themselves.
+
+One email = one identity, enforced by the existing `User.email` unique constraint — no
+additional work needed, since an email can't register as both an Organizer and a Player.
+
+**Added:**
+- Role-specific validation in `RegisterSchema` (`app/schemas/auth_schema.py`)
+- Automatic `Player`/`Team` creation inside `register_user()` (`app/services/auth_service.py`)
+- `GET /teams` (public, list) — lets a registering player browse existing teams to join
+
+**Affected SRS sections:** §7 (Participation Model), §10 (Player)
+
+**Status:** Approved and implemented.
+
+---
+
+## CR-001 — Public read access for guests
+
+**Date:** 2026-08-23
+**Reason:** Unauthenticated visitors should be able to browse tournaments, participants,
+fixtures, results, and standings without an account. Login is required only for actions
+(creating tournaments, registering as a participant, submitting results, managing
+lifecycle).
+
+**Affected SRS sections:** §6 (Actors), §37 (API)
+**Affected design:** All GET endpoints are public; POST/PUT/DELETE remain
+role-protected.
+**Confirmed during discussion:** match result submission is organizer-only with no
+player-submission path, consistent with the original SRS §6 listing of "submit match
+results" solely under Organizer.
+
+**Status:** Approved and implemented starting with Backend Phase 3 (Tournament/Venue
+routes), applied retroactively as a design rule to all subsequent routes.
+
+---
