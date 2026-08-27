@@ -127,3 +127,23 @@ def test_other_organizer_cannot_edit_tournament(client):
         headers=auth_headers(token2),
     )
     assert resp.status_code == 403
+
+def test_filter_tournaments_by_status(client):
+    token = register_and_login(client, "filterorg@example.com", "ORGANIZER")
+    t1 = client.post(
+        "/api/v1/tournaments",
+        json=create_tournament_payload(format="ROUND_ROBIN"),
+        headers=auth_headers(token),
+    ).json  # stays DRAFT
+
+    resp_draft = client.get("/api/v1/tournaments?status=DRAFT")
+    resp_ongoing = client.get("/api/v1/tournaments?status=ONGOING")
+
+    assert resp_draft.status_code == 200
+    assert any(t["id"] == t1["id"] for t in resp_draft.json["items"])
+    assert not any(t["id"] == t1["id"] for t in resp_ongoing.json["items"])
+
+
+def test_filter_tournaments_by_invalid_status_rejected(client):
+    resp = client.get("/api/v1/tournaments?status=NOT_A_REAL_STATUS")
+    assert resp.status_code == 400

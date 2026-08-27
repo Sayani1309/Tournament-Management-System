@@ -117,5 +117,12 @@ def advance_lifecycle(tournament_id: int, target_status: TournamentStatus, organ
     return tournament
 
 
-def list_tournaments():
-    return Tournament.query.order_by(Tournament.created_at.desc())
+def list_tournaments(status: str = None):
+    query = Tournament.query.order_by(Tournament.created_at.desc())
+    if status:
+        try:
+            status_enum = TournamentStatus(status)
+        except ValueError:
+            raise TournamentError(f"Invalid status filter: {status}")
+        query = query.filter(Tournament.status == status_enum)
+    return query

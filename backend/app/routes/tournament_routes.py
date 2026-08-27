@@ -23,11 +23,14 @@ tournaments_schema = TournamentSchema(many=True)
 
 @tournament_bp.route("/tournaments", methods=["GET"])
 def get_tournaments():
-    query = list_tournaments()
+    status = request.args.get("status")
+    try:
+        query = list_tournaments(status=status)
+    except TournamentError as err:
+        return jsonify({"error": err.message}), err.status_code
     result = paginate_query(query)
     result["items"] = tournaments_schema.dump(result["items"])
     return jsonify(result), 200
-
 
 @tournament_bp.route("/tournaments/<int:tournament_id>", methods=["GET"])
 def get_tournament(tournament_id):
