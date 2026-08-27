@@ -22,24 +22,40 @@ class ParticipantError(Exception):
         self.message = message
         self.status_code = status_code
 
-
-def register_participant(tournament_id: int, organizer_id: int, player_id: int = None, team_id: int = None) -> TournamentParticipant:
+def register_participant(tournament_id: int, requester_user_id: int, requester_role: str,
+                          player_id: int = None, team_id: int = None) -> TournamentParticipant:
     if (player_id is None) == (team_id is None):
-        # both None, or both provided — invalid either way
         raise ParticipantError("Exactly one of player_id or team_id must be provided")
 
     tournament = get_tournament_or_404(tournament_id)
 
-    if tournament.organizer_id != organizer_id:
-        raise ParticipantError(
-            "Only the owning organizer can register participants for this tournament",
-            status_code=403,
-        )
-    
     if tournament.status != TournamentStatus.REGISTRATION_OPEN:
         raise ParticipantError(
             "Registration is not open for this tournament", status_code=409
         )
+
+    if requester_role == "ORGANIZER":
+        if tournament.organizer_id != requester_user_id:
+            raise ParticipantError(
+                "Only the owning organizer can register participants for this tournament",
+                status_code=403,
+            )
+    elif requester_role == "PLAYER":
+        # Players may only self-register, and only into INDIVIDUAL tournaments.
+        if tournament.participant_type != ParticipationType.INDIVIDUAL:
+            raise ParticipantError(
+                "Players cannot self-register for team tournaments; contact the organizer",
+                status_code=403,
+            )
+        if team_id is not None:
+            raise ParticipantError("Players cannot register a team", status_code=403)
+
+        from app.models import Player
+        requesting_player = Player.query.filter_by(user_id=requester_user_id).first()
+        if not requesting_player or requesting_player.id != player_id:
+            raise ParticipantError("Players may only register themselves", status_code=403)
+    else:
+        raise ParticipantError("Unauthorized", status_code=403)
 
     if tournament.participant_type == ParticipationType.TEAM and team_id is None:
         raise ParticipantError(
@@ -52,8 +68,6 @@ def register_participant(tournament_id: int, organizer_id: int, player_id: int =
 
     participant_type = ParticipationType.TEAM if team_id is not None else ParticipationType.INDIVIDUAL
 
-    # Reuse an existing Participant row for this player/team if one already exists,
-    # rather than creating duplicates — Participant is meant to be a stable identity.
     query = Participant.query.filter_by(type=participant_type)
     if player_id is not None:
         query = query.filter_by(player_id=player_id)
@@ -64,7 +78,7 @@ def register_participant(tournament_id: int, organizer_id: int, player_id: int =
     if participant is None:
         participant = Participant(type=participant_type, player_id=player_id, team_id=team_id)
         db.session.add(participant)
-        db.session.flush()  # get participant.id without a full commit yet
+        db.session.flush()
 
     existing_registration = TournamentParticipant.query.filter_by(
         tournament_id=tournament_id, participant_id=participant.id
@@ -78,6 +92,7 @@ def register_participant(tournament_id: int, organizer_id: int, player_id: int =
     db.session.add(registration)
     db.session.commit()
     return registration
+
 
 
 def list_participants(tournament_id: int):

@@ -1,7 +1,8 @@
 def register_and_login(client, email, role):
-    client.post("/api/v1/auth/register", json={
-        "name": "User", "email": email, "password": "password123", "role": role,
-    })
+    payload = {"name": "User", "email": email, "password": "password123", "role": role}
+    if role == "PLAYER":
+        payload["participation_type"] = "INDIVIDUAL"
+    client.post("/api/v1/auth/register", json=payload)
     resp = client.post("/api/v1/auth/login", json={"email": email, "password": "password123"})
     return resp.json["access_token"]
 
@@ -208,3 +209,84 @@ def test_participant_list_includes_names(client, app):
     resp = client.get(f"/api/v1/tournaments/{tournament['id']}/participants")
     assert resp.status_code == 200
     assert resp.json[0]["participant"]["name"] == "Named Player"
+
+def test_player_can_self_register_for_individual_tournament(client, app):
+    from app.models import User, Player
+
+    org_token = register_and_login(client, "selforg1@example.com", "ORGANIZER")
+    tournament = create_tournament(client, org_token, participant_type="INDIVIDUAL")
+    open_registration(client, org_token, tournament["id"])
+
+    player_token = register_and_login(client, "selfplayer1@example.com", "PLAYER")
+
+    with app.app_context():
+        user = User.query.filter_by(email="selfplayer1@example.com").first()
+        player = Player.query.filter_by(user_id=user.id).first()
+        player_id = player.id
+
+    resp = client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"player_id": player_id},
+        headers=auth_headers(player_token),
+    )
+    assert resp.status_code == 201
+
+
+def test_player_cannot_self_register_for_team_tournament(client, app):
+    from app.models import User, Player
+
+    org_token = register_and_login(client, "selforg2@example.com", "ORGANIZER")
+    tournament = create_tournament(client, org_token, participant_type="TEAM")
+    open_registration(client, org_token, tournament["id"])
+
+    player_token = register_and_login(client, "selfplayer2@example.com", "PLAYER")
+
+    with app.app_context():
+        user = User.query.filter_by(email="selfplayer2@example.com").first()
+        player = Player.query.filter_by(user_id=user.id).first()
+        player_id = player.id
+
+    resp = client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"player_id": player_id},
+        headers=auth_headers(player_token),
+    )
+    assert resp.status_code == 403
+
+
+def test_player_cannot_register_someone_else(client, app):
+    from app.models import User, Player
+
+    org_token = register_and_login(client, "selforg3@example.com", "ORGANIZER")
+    tournament = create_tournament(client, org_token, participant_type="INDIVIDUAL")
+    open_registration(client, org_token, tournament["id"])
+
+    register_and_login(client, "victimplayer@example.com", "PLAYER")
+    attacker_token = register_and_login(client, "attackerplayer@example.com", "PLAYER")
+
+    with app.app_context():
+        victim_user = User.query.filter_by(email="victimplayer@example.com").first()
+        victim_player = Player.query.filter_by(user_id=victim_user.id).first()
+        victim_player_id = victim_player.id
+
+    resp = client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"player_id": victim_player_id},
+        headers=auth_headers(attacker_token),
+    )
+    assert resp.status_code == 403
+
+
+def test_player_cannot_register_a_team(client, app):
+    org_token = register_and_login(client, "selforg4@example.com", "ORGANIZER")
+    tournament = create_tournament(client, org_token, participant_type="TEAM")
+    open_registration(client, org_token, tournament["id"])
+
+    player_token = register_and_login(client, "selfplayer4@example.com", "PLAYER")
+
+    resp = client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"team_id": 1},
+        headers=auth_headers(player_token),
+    )
+    assert resp.status_code == 403

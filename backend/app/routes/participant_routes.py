@@ -1,4 +1,4 @@
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, get_jwt
 from flask import Blueprint, request, jsonify
 from marshmallow import ValidationError
 
@@ -25,17 +25,23 @@ def get_participants(tournament_id):
 
 
 @participant_bp.route("/tournaments/<int:tournament_id>/participants", methods=["POST"])
-@require_role("ORGANIZER")
+@require_role("ORGANIZER","PLAYER")
 def post_participant(tournament_id):
     try:
         data = register_schema.load(request.get_json() or {})
     except ValidationError as err:
         return jsonify({"error": err.messages}), 400
-    
-    organizer_id = int(get_jwt_identity())
+
+    requester_user_id = int(get_jwt_identity())
+    requester_role = get_jwt().get("role")
 
     try:
-        registration = register_participant(tournament_id=tournament_id,organizer_id=organizer_id, **data)
+        registration = register_participant(
+            tournament_id=tournament_id,
+            requester_user_id=requester_user_id,
+            requester_role=requester_role,
+            **data,
+        )
     except (ParticipantError, TournamentError) as err:
         return jsonify({"error": err.message}), err.status_code
 
