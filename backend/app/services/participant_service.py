@@ -127,3 +127,43 @@ def remove_participant(tournament_id: int, participant_id: int, organizer_id: in
 
     db.session.delete(registration)
     db.session.commit()
+
+def list_my_tournaments(user_id: int):
+    """Returns tournaments the logged-in player is registered in, split into
+    upcoming (not yet COMPLETED) and past (COMPLETED)."""
+    from app.models import Player, Tournament
+
+    player = Player.query.filter_by(user_id=user_id).first()
+    if not player:
+        return {"upcoming": [], "past": []}
+
+    participant = Participant.query.filter_by(
+        type=ParticipationType.INDIVIDUAL, player_id=player.id
+    ).first()
+
+    team_participant_ids = []
+    if player.team_id:
+        team_participant = Participant.query.filter_by(
+            type=ParticipationType.TEAM, team_id=player.team_id
+        ).first()
+        if team_participant:
+            team_participant_ids.append(team_participant.id)
+
+    participant_ids = team_participant_ids
+    if participant:
+        participant_ids.append(participant.id)
+
+    if not participant_ids:
+        return {"upcoming": [], "past": []}
+
+    registrations = TournamentParticipant.query.filter(
+        TournamentParticipant.participant_id.in_(participant_ids)
+    ).all()
+
+    tournament_ids = [r.tournament_id for r in registrations]
+    tournaments = Tournament.query.filter(Tournament.id.in_(tournament_ids)).all()
+
+    upcoming = [t for t in tournaments if t.status != TournamentStatus.COMPLETED]
+    past = [t for t in tournaments if t.status == TournamentStatus.COMPLETED]
+
+    return {"upcoming": upcoming, "past": past}

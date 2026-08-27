@@ -182,3 +182,52 @@ def test_guest_can_view_single_team_without_login(client, app):
 def test_get_nonexistent_team_returns_404(client):
     resp = client.get("/api/v1/teams/999999")
     assert resp.status_code == 404
+
+
+
+def test_my_tournaments_empty_for_new_player(client):
+    register(client, email="notournaments@example.com", role="PLAYER")
+    token = login(client, email="notournaments@example.com").json["access_token"]
+    resp = client.get("/api/v1/auth/me/tournaments", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json["upcoming"] == []
+    assert resp.json["past"] == []
+
+
+def test_my_tournaments_shows_registered_individual_tournament(client, app):
+    from app.models import User, Player
+
+    register(client, email="mytorg1@example.com", role="ORGANIZER")
+    org_token = login(client, email="mytorg1@example.com").json["access_token"]
+
+    tournament_resp = client.post(
+        "/api/v1/tournaments",
+        json={"name": "My Tourn Test", "sport": "Chess", "format": "ROUND_ROBIN", "participant_type": "INDIVIDUAL"},
+        headers={"Authorization": f"Bearer {org_token}"},
+    )
+    tournament = tournament_resp.json
+    client.post(f"/api/v1/tournaments/{tournament['id']}/open-registration", headers={"Authorization": f"Bearer {org_token}"})
+
+    register(client, email="mytplayer1@example.com", role="PLAYER")
+    player_token = login(client, email="mytplayer1@example.com").json["access_token"]
+
+    with app.app_context():
+        user = User.query.filter_by(email="mytplayer1@example.com").first()
+        player = Player.query.filter_by(user_id=user.id).first()
+        player_id = player.id
+
+    client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"player_id": player_id},
+        headers={"Authorization": f"Bearer {player_token}"},
+    )
+
+    resp = client.get("/api/v1/auth/me/tournaments", headers={"Authorization": f"Bearer {player_token}"})
+    assert resp.status_code == 200
+    assert len(resp.json["upcoming"]) == 1
+    assert resp.json["upcoming"][0]["id"] == tournament["id"]
+    assert resp.json["past"] == []
+
+def test_my_tournaments_requires_login(client):
+    resp = client.get("/api/v1/auth/me/tournaments")
+    assert resp.status_code == 401

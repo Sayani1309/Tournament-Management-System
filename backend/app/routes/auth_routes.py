@@ -12,7 +12,9 @@ from app.services.auth_service import (
     register_user, login_user, request_password_reset, reset_password, verify_email, AuthError,
 )
 from app.models import User, TokenBlocklist
+from app.services.participant_service import list_my_tournaments
 
+from app.schemas.tournament_schema import TournamentSchema
 auth_bp = Blueprint("auth", __name__)
 
 register_schema = RegisterSchema()
@@ -20,7 +22,7 @@ login_schema = LoginSchema()
 user_schema = UserSchema()
 forgot_password_schema = ForgotPasswordSchema()
 reset_password_schema = ResetPasswordSchema()
-
+tournament_list_schema = TournamentSchema(many=True)
 
 @auth_bp.route("/auth/register", methods=["POST"])
 @limiter.limit("20 per minute")
@@ -120,3 +122,13 @@ def verify_email_route():
         return jsonify({"error": err.message}), err.status_code
 
     return jsonify({"message": "Email verified successfully"}), 200
+
+@auth_bp.route("/auth/me/tournaments", methods=["GET"])
+@jwt_required()
+def my_tournaments():
+    user_id = int(get_jwt_identity())
+    result = list_my_tournaments(user_id)
+    return jsonify({
+        "upcoming": tournament_list_schema.dump(result["upcoming"]),
+        "past": tournament_list_schema.dump(result["past"]),
+    }), 200
