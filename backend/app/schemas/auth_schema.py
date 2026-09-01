@@ -69,6 +69,9 @@ class UserSchema(Schema):
     id = fields.Int(dump_only=True)
     name = fields.Str()
     email = fields.Email()
-    role = fields.Str()
+    role = fields.Method("get_role")
     is_verified = fields.Bool(dump_only=True)
     created_at = fields.DateTime(dump_only=True)
+
+    def get_role(self, obj):
+        return obj.role.value
