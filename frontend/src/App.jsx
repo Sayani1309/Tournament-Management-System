@@ -6,6 +6,7 @@ import PlayerRegisterPage from './pages/PlayerRegisterPage';
 import OrganizerRegisterPage from './pages/OrganizerRegisterPage';
 import PlayerLoginPage from './pages/PlayerLoginPage';
 import OrganizerLoginPage from './pages/OrganizerLoginPage';
+import TournamentDetailPage from './pages/TournamentDetailPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
           <Route path="/organizer/register" element={<OrganizerRegisterPage />} />
           <Route path="/player/login" element={<PlayerLoginPage />} />
           <Route path="/organizer/login" element={<OrganizerLoginPage />} />
+          <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
