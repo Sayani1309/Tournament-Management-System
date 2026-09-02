@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import AppShell from '../components/layout/AppShell';
 import TournamentList from '../components/tournament/TournamentList';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -12,6 +12,7 @@ export default function HomePage() {
   const [upcoming, setUpcoming] = useState([]);
   const [live, setLive] = useState([]);
   const [completed, setCompleted] = useState([]);
+  const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -37,8 +38,30 @@ export default function HomePage() {
     load();
   }, []);
 
+  const filterList = (list) => {
+    if (!search.trim()) return list;
+    const q = search.toLowerCase();
+    return list.filter(
+      (t) => t.name.toLowerCase().includes(q) || t.sport.toLowerCase().includes(q)
+    );
+  };
+
+  const filteredUpcoming = useMemo(() => filterList(upcoming), [upcoming, search]);
+  const filteredLive = useMemo(() => filterList(live), [live, search]);
+  const filteredCompleted = useMemo(() => filterList(completed), [completed, search]);
+
   return (
     <AppShell>
+      <div className="flex justify-end mb-6">
+        <input
+          type="text"
+          placeholder="Search by name or sport..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="bg-sidebar text-text-primary placeholder-text-secondary rounded-full px-5 py-2 w-72 outline-none focus:ring-2 focus:ring-accent"
+        />
+      </div>
+
       <div className="bg-gradient-to-r from-bg-secondary to-accent rounded-3xl p-8 mb-8">
         <h1 className="text-3xl text-text-primary">
           Hello{user ? `, ${user.name}` : ''}
@@ -53,22 +76,22 @@ export default function HomePage() {
         <LoadingSpinner />
       ) : (
         <>
-          {live.length > 0 && (
+          {filteredLive.length > 0 && (
             <section className="mb-8">
               <h2 className="text-2xl text-text-primary mb-4">🔴 Live</h2>
-              <TournamentList tournaments={live} />
+              <TournamentList tournaments={filteredLive} />
             </section>
           )}
 
           <section className="mb-8">
             <h2 className="text-2xl text-text-primary mb-4">Upcoming Tournaments</h2>
-            <TournamentList tournaments={upcoming} />
+            <TournamentList tournaments={filteredUpcoming} />
           </section>
 
-          {completed.length > 0 && (
+          {filteredCompleted.length > 0 && (
             <section className="mb-8">
               <h2 className="text-2xl text-text-primary mb-4">Previous Results</h2>
-              <TournamentList tournaments={completed} />
+              <TournamentList tournaments={filteredCompleted} />
             </section>
           )}
         </>
