@@ -70,8 +70,22 @@ class UserSchema(Schema):
     name = fields.Str()
     email = fields.Email()
     role = fields.Method("get_role")
+    player_id = fields.Method("get_player_id")
+    team_id = fields.Method("get_team_id")
+    team_name = fields.Method("get_team_name")
     is_verified = fields.Bool(dump_only=True)
     created_at = fields.DateTime(dump_only=True)
 
     def get_role(self, obj):
         return obj.role.value
+
+    def get_player_id(self, obj):
+        return obj.player.id if obj.player else None
+
+    def get_team_id(self, obj):
+        return obj.player.team_id if obj.player else None
+
+    def get_team_name(self, obj):
+        if obj.player and obj.player.team:
+            return obj.player.team.name
+        return None

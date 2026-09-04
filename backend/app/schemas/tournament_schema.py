@@ -38,6 +38,8 @@ class TournamentSchema(Schema):
     start_date = fields.Date(allow_none=True)
     end_date = fields.Date(allow_none=True)
     organizer_id = fields.Int()
+    organizer_name = fields.Method("get_organizer_name")
+    organizer_email = fields.Method("get_organizer_email")
     created_at = fields.DateTime(dump_only=True)
 
     def get_format(self, obj):
@@ -48,3 +50,9 @@ class TournamentSchema(Schema):
 
     def get_status(self, obj):
         return obj.status.value
+
+    def get_organizer_name(self, obj):
+        return obj.organizer.name if obj.organizer else None
+
+    def get_organizer_email(self, obj):
+        return obj.organizer.email if obj.organizer else None

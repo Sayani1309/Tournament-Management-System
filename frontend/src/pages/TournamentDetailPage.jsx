@@ -4,19 +4,22 @@ import AppShell from '../components/layout/AppShell';
 import StatusBadge from '../components/common/StatusBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorBanner from '../components/common/ErrorBanner';
+import Button from '../components/common/Button';
 import ParticipantList from '../components/tournament/ParticipantList';
 import MatchList from '../components/tournament/MatchList';
 import StandingsTable from '../components/tournament/StandingsTable';
 import { getTournament } from '../api/tournamentApi';
-import { listParticipants } from '../api/participantApi';
+import { listParticipants, registerParticipant } from '../api/participantApi';
 import { listMatches } from '../api/matchApi';
 import { getStandings } from '../api/standingsApi';
 import { getErrorMessage } from '../utils/errorMessage';
+import { useAuth } from '../hooks/useAuth';
 
 const TABS = ['Participants', 'Fixtures', 'Standings'];
 
 export default function TournamentDetailPage() {
   const { id } = useParams();
+  const { isAuthenticated, role, user } = useAuth();
   const [tournament, setTournament] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [matches, setMatches] = useState([]);
@@ -24,30 +27,53 @@ export default function TournamentDetailPage() {
   const [activeTab, setActiveTab] = useState('Participants');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [joinError, setJoinError] = useState('');
+  const [joining, setJoining] = useState(false);
+  const [joined, setJoined] = useState(false);
+
+  async function loadAll() {
+    setLoading(true);
+    setError('');
+    try {
+      const [tRes, pRes, mRes, sRes] = await Promise.all([
+        getTournament(id),
+        listParticipants(id),
+        listMatches(id),
+        getStandings(id),
+      ]);
+      setTournament(tRes.data);
+      setParticipants(pRes.data);
+      setMatches(mRes.data);
+      setStandings(sRes.data);
+
+      if (role === 'PLAYER' && user?.player_id) {
+        const alreadyIn = pRes.data.some((p) => p.participant?.player_id === user.player_id);
+        setJoined(alreadyIn);
+      }
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      setError('');
-      try {
-        const [tRes, pRes, mRes, sRes] = await Promise.all([
-          getTournament(id),
-          listParticipants(id),
-          listMatches(id),
-          getStandings(id),
-        ]);
-        setTournament(tRes.data);
-        setParticipants(pRes.data);
-        setMatches(mRes.data);
-        setStandings(sRes.data);
-      } catch (err) {
-        setError(getErrorMessage(err));
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function handleJoin() {
+    setJoinError('');
+    setJoining(true);
+    try {
+      await registerParticipant(id, { player_id: user.player_id });
+      await loadAll();
+    } catch (err) {
+      setJoinError(getErrorMessage(err));
+    } finally {
+      setJoining(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -65,10 +91,23 @@ export default function TournamentDetailPage() {
     );
   }
 
+  const canShowJoin =
+    isAuthenticated &&
+    role === 'PLAYER' &&
+    tournament.status === 'REGISTRATION_OPEN' &&
+    tournament.participant_type === 'INDIVIDUAL' &&
+    !joined;
+
+  const isTeamTournamentForPlayer =
+    isAuthenticated &&
+    role === 'PLAYER' &&
+    tournament.status === 'REGISTRATION_OPEN' &&
+    tournament.participant_type === 'TEAM';
+
   return (
     <AppShell>
       <div className="mb-6">
-        <div className="flex items-center gap-4 mb-2">
+        <div className="flex items-center gap-4 mb-2 flex-wrap">
           <h1 className="text-3xl text-text-primary">{tournament.name}</h1>
           <StatusBadge status={tournament.status} />
         </div>
@@ -77,6 +116,28 @@ export default function TournamentDetailPage() {
         </p>
         {tournament.description && (
           <p className="text-text-primary mt-3">{tournament.description}</p>
+        )}
+
+        {canShowJoin && (
+          <div className="mt-4">
+            <ErrorBanner message={joinError} />
+            <Button onClick={handleJoin} disabled={joining}>
+              {joining ? 'Joining...' : 'Join this tournament'}
+            </Button>
+          </div>
+        )}
+
+        {joined && (
+          <p className="text-text-secondary mt-4">You're registered for this tournament.</p>
+        )}
+
+        {isTeamTournamentForPlayer && (
+          <p className="text-text-secondary mt-4">
+            This is a team tournament — contact the organizer to register your team:{' '}
+            <a href={`mailto:${tournament.organizer_email}`} className="text-accent underline">
+              {tournament.organizer_name} ({tournament.organizer_email})
+            </a>
+          </p>
         )}
       </div>
 
