@@ -137,3 +137,22 @@ def test_matches_include_participant_names(client, app):
         assert len(match["participants"]) == 2
         for p in match["participants"]:
             assert p["name"] is not None
+
+def test_get_single_match(client, app):
+    token, tid = setup_tournament_with_participants(client, app, 4)
+    client.post(f"/api/v1/tournaments/{tid}/fixtures", headers=auth_headers(token))
+
+    with app.app_context():
+        from app.models import Match
+        match = Match.query.filter_by(tournament_id=tid).first()
+        match_id = match.id
+
+    resp = client.get(f"/api/v1/matches/{match_id}")
+    assert resp.status_code == 200
+    assert resp.json["id"] == match_id
+    assert len(resp.json["participants"]) == 2
+
+
+def test_get_nonexistent_match_returns_404(client):
+    resp = client.get("/api/v1/matches/999999")
+    assert resp.status_code == 404

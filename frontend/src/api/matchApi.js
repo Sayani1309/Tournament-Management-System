@@ -4,6 +4,10 @@ export function listMatches(tournamentId) {
   return client.get(`/tournaments/${tournamentId}/matches`);
 }
 
+export function getMatch(matchId) {
+  return client.get(`/matches/${matchId}`);
+}
+
 export function generateFixtures(tournamentId) {
   return client.post(`/tournaments/${tournamentId}/fixtures`);
 }

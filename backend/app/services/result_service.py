@@ -51,6 +51,14 @@ def submit_result(match_id: int,organizer_id: int, scores: list, result_type: st
     except ValueError:
         raise ResultError(f"Invalid result_type: {result_type}", status_code=400)
 
+    
+
+    if result_type_enum == ResultType.DRAW and tournament.format == TournamentFormat.KNOCKOUT:
+        raise ResultError(
+            "Knockout matches cannot end in a draw — a winner must be determined (e.g. via tie-break) and submitted as a WIN",
+            status_code=400,
+        )
+
     if result_type_enum == ResultType.WIN:
         if winner_participant_id is None or winner_participant_id not in valid_participant_ids:
             raise ResultError(
@@ -81,7 +89,7 @@ def submit_result(match_id: int,organizer_id: int, scores: list, result_type: st
         scores_by_participant = {entry["participant_id"]: entry["score"] for entry in scores}
         update_standings_for_result(match, match_result, scores_by_participant)
 
-        tournament = db.session.get(Tournament, match.tournament_id)
+        
 
         if tournament.format == TournamentFormat.KNOCKOUT:
             if match_result.winner_participant_id is not None:

@@ -6,7 +6,7 @@ from marshmallow import ValidationError
 from app.extensions import require_role
 from app.schemas.match_schema import MatchSchema
 from app.schemas.match_result_schema import MatchResultSubmitSchema, MatchResultSchema
-from app.services.fixture_service import generate_fixtures, list_matches, FixtureError
+from app.services.fixture_service import generate_fixtures, list_matches, get_match_or_404, FixtureError
 from app.services.result_service import submit_result, get_match_result, ResultError
 from app.services.tournament_service import TournamentError
 
@@ -38,6 +38,14 @@ def get_matches(tournament_id):
     except TournamentError as err:
         return jsonify({"error": err.message}), err.status_code
     return jsonify(matches_schema.dump(matches)), 200
+
+@match_bp.route("/matches/<int:match_id>", methods=["GET"])
+def get_match(match_id):
+    try:
+        match = get_match_or_404(match_id)
+    except FixtureError as err:
+        return jsonify({"error": err.message}), err.status_code
+    return jsonify(match_schema.dump(match)), 200
 
 
 # ---------- Results ----------

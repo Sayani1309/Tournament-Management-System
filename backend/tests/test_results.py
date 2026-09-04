@@ -197,3 +197,42 @@ def test_other_organizer_cannot_submit_result(client, app):
         headers=auth_headers(other_token),
     )
     assert resp.status_code == 403
+
+def test_knockout_match_cannot_be_draw(client, app):
+    from app.models import Player
+    from app.extensions import db
+
+    token = register_and_login(client, "koresult@example.com")
+    tournament = client.post(
+        "/api/v1/tournaments",
+        json={"name": "KO Draw Test", "sport": "Chess", "format": "KNOCKOUT", "participant_type": "INDIVIDUAL"},
+        headers=auth_headers(token),
+    ).json
+    client.post(f"/api/v1/tournaments/{tournament['id']}/open-registration", headers=auth_headers(token))
+
+    with app.app_context():
+        p1 = Player(name="KO A")
+        p2 = Player(name="KO B")
+        db.session.add_all([p1, p2])
+        db.session.commit()
+        p1_id, p2_id = p1.id, p2.id
+
+    client.post(f"/api/v1/tournaments/{tournament['id']}/participants", json={"player_id": p1_id}, headers=auth_headers(token))
+    client.post(f"/api/v1/tournaments/{tournament['id']}/participants", json={"player_id": p2_id}, headers=auth_headers(token))
+    client.post(f"/api/v1/tournaments/{tournament['id']}/start", headers=auth_headers(token))
+    matches = client.post(f"/api/v1/tournaments/{tournament['id']}/fixtures", headers=auth_headers(token)).json
+    match_id = matches[0]["id"]
+    participant_ids = [p["id"] for p in matches[0]["participants"]]
+
+    resp = client.post(
+        f"/api/v1/matches/{match_id}/result",
+        json={
+            "result_type": "DRAW",
+            "scores": [
+                {"participant_id": participant_ids[0], "score": 1},
+                {"participant_id": participant_ids[1], "score": 1},
+            ],
+        },
+        headers=auth_headers(token),
+    )
+    assert resp.status_code == 400

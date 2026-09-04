@@ -8,6 +8,7 @@ import Button from '../components/common/Button';
 import ParticipantList from '../components/tournament/ParticipantList';
 import MatchList from '../components/tournament/MatchList';
 import StandingsTable from '../components/tournament/StandingsTable';
+import ChampionBanner from '../components/tournament/ChampionBanner';
 import { getTournament } from '../api/tournamentApi';
 import { listParticipants, registerParticipant } from '../api/participantApi';
 import { listMatches } from '../api/matchApi';
@@ -140,7 +141,7 @@ export default function TournamentDetailPage() {
           </p>
         )}
       </div>
-
+      <ChampionBanner tournament={tournament} matches={matches} standings={standings} />
       <div className="flex gap-2 mb-6">
         {TABS.map((tab) => (
           <button

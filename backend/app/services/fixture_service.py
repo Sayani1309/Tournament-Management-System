@@ -185,3 +185,9 @@ def generate_fixtures(tournament_id: int, organizer_id: int):
 def list_matches(tournament_id: int):
     get_tournament_or_404(tournament_id)
     return Match.query.filter_by(tournament_id=tournament_id).order_by(Match.id).all()
+
+def get_match_or_404(match_id: int) -> Match:
+    match = db.session.get(Match, match_id)
+    if not match:
+        raise FixtureError("Match not found", status_code=404)
+    return match

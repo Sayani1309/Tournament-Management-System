@@ -8,6 +8,10 @@ import PlayerLoginPage from './pages/PlayerLoginPage';
 import OrganizerLoginPage from './pages/OrganizerLoginPage';
 import TournamentDetailPage from './pages/TournamentDetailPage';
 import PlayerDashboardPage from './pages/PlayerDashboardPage';
+import OrganizerDashboardPage from './pages/OrganizerDashboardPage';
+import CreateTournamentPage from './pages/CreateTournamentPage';
+import TournamentManagementPage from './pages/TournamentManagementPage';
+import MatchResultPage from './pages/MatchResultPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -23,6 +27,10 @@ function App() {
           <Route path="/organizer/login" element={<OrganizerLoginPage />} />
           <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
           <Route path="/player/dashboard" element={<PlayerDashboardPage />} />
+          <Route path="/organizer/dashboard" element={<OrganizerDashboardPage />} />
+          <Route path="/organizer/tournaments/new" element={<CreateTournamentPage />} />
+          <Route path="/organizer/tournaments/:id" element={<TournamentManagementPage />} />
+          <Route path="/organizer/matches/:id/result" element={<MatchResultPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>
