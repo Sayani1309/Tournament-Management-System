@@ -6,21 +6,100 @@ import Button from '../components/common/Button';
 import StatusBadge from '../components/common/StatusBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ErrorBanner from '../components/common/ErrorBanner';
-import ParticipantList from '../components/tournament/ParticipantList';
-import MatchList from '../components/tournament/MatchList';
-import StandingsTable from '../components/tournament/StandingsTable';
 import ChampionBanner from '../components/tournament/ChampionBanner';
+import StandingsTable from '../components/tournament/StandingsTable';
 import {
   getTournament,
   openRegistration,
   startTournament,
 } from '../api/tournamentApi';
 import { listParticipants, registerParticipant, removeParticipant } from '../api/participantApi';
-import { listMatches, generateFixtures } from '../api/matchApi';
+import { listMatches, generateFixtures, scheduleMatch } from '../api/matchApi';
 import { getStandings } from '../api/standingsApi';
 import { listPlayers } from '../api/playerApi';
 import { listTeams } from '../api/teamApi';
+import { listVenues } from '../api/venueApi';
 import { getErrorMessage } from '../utils/errorMessage';
+
+function matchLabel(participants) {
+  if (participants.length === 2) return `${participants[0].name} vs ${participants[1].name}`;
+  if (participants.length === 1) return `${participants[0].name} vs TBA`;
+  return 'TBA vs TBA';
+}
+
+function MatchScheduleRow({ match, venues, onScheduled }) {
+  const [venueId, setVenueId] = useState(match.venue_id || '');
+  const [scheduledAt, setScheduledAt] = useState(
+    match.scheduled_at ? match.scheduled_at.slice(0, 16) : ''
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSave() {
+    setError('');
+    setSaving(true);
+    try {
+      const payload = {};
+      if (venueId) payload.venue_id = Number(venueId);
+      if (scheduledAt) payload.scheduled_at = new Date(scheduledAt).toISOString();
+      await scheduleMatch(match.id, payload);
+      onScheduled();
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-bg-primary rounded-xl px-4 py-3">
+      <div className="flex justify-between items-center mb-2">
+        <div>
+          <div className="text-text-secondary text-xs mb-1">{match.round}</div>
+          <div className="text-text-primary">{matchLabel(match.participants)}</div>
+        </div>
+        {match.status === 'SCHEDULED' && match.participants.length === 2 ? (
+          <Link to={`/organizer/matches/${match.id}/result`}>
+            <Button>Enter Result</Button>
+          </Link>
+        ) : (
+          <StatusBadge status={match.status} />
+        )}
+      </div>
+
+      {match.status === 'SCHEDULED' && (
+        <div className="flex gap-3 items-end flex-wrap mt-3">
+          <ErrorBanner message={error} />
+          <div>
+            <label className="block text-text-secondary text-xs mb-1">Venue</label>
+            <select
+              className="bg-transparent border-b border-text-secondary text-text-primary py-1 outline-none focus:border-accent"
+              value={venueId}
+              onChange={(e) => setVenueId(e.target.value)}
+            >
+              <option value="" className="bg-card">No venue</option>
+              {venues.map((v) => (
+                <option key={v.id} value={v.id} className="bg-card">{v.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-text-secondary text-xs mb-1">Date & Time</label>
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              className="bg-transparent border-b border-text-secondary text-text-primary py-1 outline-none focus:border-accent"
+            />
+          </div>
+          <Button variant="secondary" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving...' : 'Save Schedule'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function TournamentManagementPage() {
   const { id } = useParams();
@@ -30,6 +109,7 @@ export default function TournamentManagementPage() {
   const [standings, setStandings] = useState([]);
   const [players, setPlayers] = useState([]);
   const [teams, setTeams] = useState([]);
+  const [venues, setVenues] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -40,16 +120,18 @@ export default function TournamentManagementPage() {
     setLoading(true);
     setError('');
     try {
-      const [tRes, pRes, mRes, sRes] = await Promise.all([
+      const [tRes, pRes, mRes, sRes, vRes] = await Promise.all([
         getTournament(id),
         listParticipants(id),
         listMatches(id),
         getStandings(id),
+        listVenues(),
       ]);
       setTournament(tRes.data);
       setParticipants(pRes.data);
       setMatches(mRes.data);
       setStandings(sRes.data);
+      setVenues(vRes.data);
 
       if (tRes.data.status === 'REGISTRATION_OPEN') {
         if (tRes.data.participant_type === 'INDIVIDUAL') {
@@ -124,7 +206,9 @@ export default function TournamentManagementPage() {
           {tournament.sport} · {tournament.format.replace('_', ' ')} · {tournament.participant_type}
         </p>
       </div>
+
       <ChampionBanner tournament={tournament} matches={matches} standings={standings} />
+
       <ErrorBanner message={actionError} />
 
       {tournament.status === 'DRAFT' && (
@@ -199,21 +283,9 @@ export default function TournamentManagementPage() {
           ) : (
             <>
               <h2 className="text-xl text-text-primary mb-4">Matches</h2>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-3">
                 {matches.map((m) => (
-                  <div key={m.id} className="bg-bg-primary rounded-xl px-4 py-3 flex justify-between items-center">
-                    <div>
-                      <div className="text-text-secondary text-xs mb-1">{m.round}</div>
-                      <div className="text-text-primary">{m.participants.map((p) => p.name).join(' vs ')}</div>
-                    </div>
-                    {m.status === 'SCHEDULED' ? (
-                      <Link to={`/organizer/matches/${m.id}/result`}>
-                        <Button>Enter Result</Button>
-                      </Link>
-                    ) : (
-                      <StatusBadge status={m.status} />
-                    )}
-                  </div>
+                  <MatchScheduleRow key={m.id} match={m} venues={venues} onScheduled={loadAll} />
                 ))}
               </div>
             </>

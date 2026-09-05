@@ -6,7 +6,10 @@ from marshmallow import ValidationError
 from app.extensions import require_role
 from app.schemas.match_schema import MatchSchema
 from app.schemas.match_result_schema import MatchResultSubmitSchema, MatchResultSchema
-from app.services.fixture_service import generate_fixtures, list_matches, get_match_or_404, FixtureError
+from app.schemas.match_schema import MatchScheduleUpdateSchema
+from app.services.fixture_service import (
+    generate_fixtures, list_matches, get_match_or_404, update_match_schedule, FixtureError,
+)
 from app.services.result_service import submit_result, get_match_result, ResultError
 from app.services.tournament_service import TournamentError
 
@@ -16,9 +19,25 @@ match_schema = MatchSchema()
 matches_schema = MatchSchema(many=True)
 result_submit_schema = MatchResultSubmitSchema()
 result_schema = MatchResultSchema()
+match_schedule_schema = MatchScheduleUpdateSchema()
 
 
 # ---------- Fixtures ----------
+@match_bp.route("/matches/<int:match_id>/schedule", methods=["PUT"])
+@require_role("ORGANIZER")
+def put_match_schedule(match_id):
+    try:
+        data = match_schedule_schema.load(request.get_json() or {})
+    except ValidationError as err:
+        return jsonify({"error": err.messages}), 400
+
+    organizer_id = int(get_jwt_identity())
+    try:
+        match = update_match_schedule(match_id, organizer_id, **data)
+    except FixtureError as err:
+        return jsonify({"error": err.message}), err.status_code
+
+    return jsonify(match_schema.dump(match)), 200
 
 @match_bp.route("/tournaments/<int:tournament_id>/fixtures", methods=["POST"])
 @require_role("ORGANIZER")

@@ -15,6 +15,7 @@ import { listMatches } from '../api/matchApi';
 import { getStandings } from '../api/standingsApi';
 import { getErrorMessage } from '../utils/errorMessage';
 import { useAuth } from '../hooks/useAuth';
+import { listVenues } from '../api/venueApi';
 
 const TABS = ['Participants', 'Fixtures', 'Standings'];
 
@@ -31,21 +32,23 @@ export default function TournamentDetailPage() {
   const [joinError, setJoinError] = useState('');
   const [joining, setJoining] = useState(false);
   const [joined, setJoined] = useState(false);
-
+  const [venues, setVenues] = useState([]);
   async function loadAll() {
     setLoading(true);
     setError('');
     try {
-      const [tRes, pRes, mRes, sRes] = await Promise.all([
+      const [tRes, pRes, mRes, sRes, vRes] = await Promise.all([
         getTournament(id),
         listParticipants(id),
         listMatches(id),
         getStandings(id),
+        listVenues(),
       ]);
       setTournament(tRes.data);
       setParticipants(pRes.data);
       setMatches(mRes.data);
       setStandings(sRes.data);
+      setVenues(vRes.data);
 
       if (role === 'PLAYER' && user?.player_id) {
         const alreadyIn = pRes.data.some((p) => p.participant?.player_id === user.player_id);
@@ -157,7 +160,7 @@ export default function TournamentDetailPage() {
       </div>
 
       {activeTab === 'Participants' && <ParticipantList participants={participants} />}
-      {activeTab === 'Fixtures' && <MatchList matches={matches} />}
+      {activeTab === 'Fixtures' && <MatchList matches={matches} venues={venues} />}
       {activeTab === 'Standings' && <StandingsTable standings={standings} />}
     </AppShell>
   );

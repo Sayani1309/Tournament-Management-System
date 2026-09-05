@@ -41,9 +41,14 @@ export default function OrganizerDashboardPage() {
           <h1 className="text-3xl text-text-primary">Hello, {user?.name}</h1>
           <p className="text-text-secondary mt-2">Manage your tournaments.</p>
         </div>
-        <Link to="/organizer/tournaments/new">
-          <Button>+ Create Tournament</Button>
-        </Link>
+        <div className="flex gap-3">
+          <Link to="/venues">
+            <Button variant="secondary">Manage Venues</Button>
+          </Link>
+          <Link to="/organizer/tournaments/new">
+            <Button>+ Create Tournament</Button>
+          </Link>
+        </div>
       </div>
 
       <ErrorBanner message={error} />

@@ -186,6 +186,30 @@ def list_matches(tournament_id: int):
     get_tournament_or_404(tournament_id)
     return Match.query.filter_by(tournament_id=tournament_id).order_by(Match.id).all()
 
+def update_match_schedule(match_id: int, organizer_id: int, venue_id: int = None, scheduled_at=None):
+    from app.models import Venue
+
+    match = get_match_or_404(match_id)
+    tournament = db.session.get(Tournament, match.tournament_id)
+
+    if tournament.organizer_id != organizer_id:
+        raise FixtureError(
+            "Only the owning organizer can schedule matches for this tournament",
+            status_code=403,
+        )
+
+    if venue_id is not None:
+        venue = db.session.get(Venue, venue_id)
+        if not venue:
+            raise FixtureError("Venue not found", status_code=404)
+        match.venue_id = venue_id
+
+    if scheduled_at is not None:
+        match.scheduled_at = scheduled_at
+
+    db.session.commit()
+    return match
+    
 def get_match_or_404(match_id: int) -> Match:
     match = db.session.get(Match, match_id)
     if not match:

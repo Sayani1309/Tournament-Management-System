@@ -19,3 +19,7 @@ export function submitResult(matchId, payload) {
 export function getResult(matchId) {
   return client.get(`/matches/${matchId}/result`);
 }
+
+export function scheduleMatch(matchId, payload) {
+  return client.put(`/matches/${matchId}/schedule`, payload);
+}

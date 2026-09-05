@@ -12,6 +12,9 @@ import OrganizerDashboardPage from './pages/OrganizerDashboardPage';
 import CreateTournamentPage from './pages/CreateTournamentPage';
 import TournamentManagementPage from './pages/TournamentManagementPage';
 import MatchResultPage from './pages/MatchResultPage';
+import MatchScoreCardPage from './pages/MatchScoreCardPage';
+import VenueListPage from './pages/VenueListPage';
+import CreateVenuePage from './pages/CreateVenuePage';
 import NotFoundPage from './pages/NotFoundPage';
 
 function App() {
@@ -26,11 +29,14 @@ function App() {
           <Route path="/player/login" element={<PlayerLoginPage />} />
           <Route path="/organizer/login" element={<OrganizerLoginPage />} />
           <Route path="/tournaments/:id" element={<TournamentDetailPage />} />
+          <Route path="/matches/:id" element={<MatchScoreCardPage />} />
           <Route path="/player/dashboard" element={<PlayerDashboardPage />} />
           <Route path="/organizer/dashboard" element={<OrganizerDashboardPage />} />
           <Route path="/organizer/tournaments/new" element={<CreateTournamentPage />} />
           <Route path="/organizer/tournaments/:id" element={<TournamentManagementPage />} />
           <Route path="/organizer/matches/:id/result" element={<MatchResultPage />} />
+          <Route path="/venues" element={<VenueListPage />} />
+          <Route path="/venues/new" element={<CreateVenuePage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </BrowserRouter>

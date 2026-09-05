@@ -25,3 +25,7 @@ class MatchSchema(Schema):
             if participant:
                 result.append(get_participant_display(participant))
         return result
+
+class MatchScheduleUpdateSchema(Schema):
+    venue_id = fields.Int(required=False, allow_none=True)
+    scheduled_at = fields.DateTime(required=False, allow_none=True)

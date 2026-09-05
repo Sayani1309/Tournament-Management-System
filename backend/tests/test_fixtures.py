@@ -156,3 +156,37 @@ def test_get_single_match(client, app):
 def test_get_nonexistent_match_returns_404(client):
     resp = client.get("/api/v1/matches/999999")
     assert resp.status_code == 404
+
+def test_organizer_can_schedule_match_venue_and_time(client, app):
+    token, tid = setup_tournament_with_participants(client, app, 4)
+    matches = client.post(f"/api/v1/tournaments/{tid}/fixtures", headers=auth_headers(token)).json
+    match_id = matches[0]["id"]
+
+    venue_resp = client.post(
+        "/api/v1/venues",
+        json={"name": "Test Arena", "location": "City"},
+        headers=auth_headers(token),
+    )
+    venue_id = venue_resp.json["id"]
+
+    resp = client.put(
+        f"/api/v1/matches/{match_id}/schedule",
+        json={"venue_id": venue_id, "scheduled_at": "2026-12-01T15:00:00+00:00"},
+        headers=auth_headers(token),
+    )
+    assert resp.status_code == 200
+    assert resp.json["venue_id"] == venue_id
+
+
+def test_other_organizer_cannot_schedule_match(client, app):
+    token, tid = setup_tournament_with_participants(client, app, 4)
+    matches = client.post(f"/api/v1/tournaments/{tid}/fixtures", headers=auth_headers(token)).json
+    match_id = matches[0]["id"]
+
+    other_token = register_and_login(client, "otherorg_schedule@example.com")
+    resp = client.put(
+        f"/api/v1/matches/{match_id}/schedule",
+        json={"venue_id": None, "scheduled_at": "2026-12-01T15:00:00+00:00"},
+        headers=auth_headers(other_token),
+    )
+    assert resp.status_code == 403
