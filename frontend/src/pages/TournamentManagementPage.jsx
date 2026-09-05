@@ -1,3 +1,4 @@
+import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
@@ -115,6 +116,7 @@ export default function TournamentManagementPage() {
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(null); // holds the participant being confirmed, or null
 
   async function loadAll() {
     setLoading(true);
@@ -253,7 +255,7 @@ export default function TournamentManagementPage() {
               <div key={p.id} className="bg-bg-primary rounded-xl px-4 py-2 flex justify-between items-center">
                 <span className="text-text-primary">{p.participant?.name}</span>
                 <button
-                  onClick={() => runAction(() => removeParticipant(id, p.participant_id))}
+                  onClick={() => setConfirmRemove(p)}
                   className="text-accent text-sm hover:underline"
                   disabled={actionLoading}
                 >
@@ -306,6 +308,18 @@ export default function TournamentManagementPage() {
           <StandingsTable standings={standings} />
         </Card>
       )}
+      <ConfirmDialog
+        open={!!confirmRemove}
+        title="Remove participant?"
+        message={`Are you sure you want to remove "${confirmRemove?.participant?.name}" from this tournament?`}
+        confirmLabel="Remove"
+        loading={actionLoading}
+        onCancel={() => setConfirmRemove(null)}
+        onConfirm={async () => {
+          await runAction(() => removeParticipant(id, confirmRemove.participant_id));
+          setConfirmRemove(null);
+        }}
+      />
     </AppShell>
   );
 }
