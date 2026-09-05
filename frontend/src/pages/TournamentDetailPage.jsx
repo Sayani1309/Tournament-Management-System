@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import AppShell from '../components/layout/AppShell';
 import StatusBadge from '../components/common/StatusBadge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
@@ -161,7 +162,14 @@ export default function TournamentDetailPage() {
 
       {activeTab === 'Participants' && <ParticipantList participants={participants} />}
       {activeTab === 'Fixtures' && <MatchList matches={matches} venues={venues} />}
-      {activeTab === 'Standings' && <StandingsTable standings={standings} />}
+      {activeTab === 'Standings' && (
+        <>
+          <StandingsTable standings={standings} />
+          <Link to={`/tournaments/${id}/standings`} className="text-accent underline text-sm mt-4 inline-block">
+            Open full-page standings view
+          </Link>
+        </>
+      )}
     </AppShell>
   );
 }

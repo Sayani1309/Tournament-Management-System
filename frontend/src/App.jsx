@@ -16,6 +16,7 @@ import MatchScoreCardPage from './pages/MatchScoreCardPage';
 import VenueListPage from './pages/VenueListPage';
 import CreateVenuePage from './pages/CreateVenuePage';
 import NotFoundPage from './pages/NotFoundPage';
+import StandingsPage from './pages/StandingsPage';
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
           <Route path="/venues" element={<VenueListPage />} />
           <Route path="/venues/new" element={<CreateVenuePage />} />
           <Route path="*" element={<NotFoundPage />} />
+          <Route path="/tournaments/:id/standings" element={<StandingsPage />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
