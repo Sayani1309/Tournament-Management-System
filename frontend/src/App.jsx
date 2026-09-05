@@ -18,6 +18,8 @@ import StandingsPage from './pages/StandingsPage';
 import VenueListPage from './pages/VenueListPage';
 import CreateVenuePage from './pages/CreateVenuePage';
 import NotFoundPage from './pages/NotFoundPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function App() {
   return (
@@ -35,6 +37,8 @@ function App() {
           <Route path="/tournaments/:id/standings" element={<StandingsPage />} />
           <Route path="/matches/:id" element={<MatchScoreCardPage />} />
           <Route path="/venues" element={<VenueListPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
 
           {/* Player-only routes */}
           <Route

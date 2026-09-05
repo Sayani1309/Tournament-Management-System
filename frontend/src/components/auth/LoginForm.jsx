@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Button from '../common/Button';
 import TextInput from '../common/TextInput';
 import ErrorBanner from '../common/ErrorBanner';
@@ -42,6 +42,9 @@ export default function LoginForm({ expectedRole, onSuccessPath }) {
       <Button type="submit" disabled={loading} className="w-full mt-4">
         {loading ? 'Logging in...' : 'Log In'}
       </Button>
+      <Link to="/forgot-password" className="text-accent underline text-sm mt-3 inline-block">
+        Forgot password?
+      </Link>
     </form>
   );
 }
