@@ -72,7 +72,11 @@ export default function MatchResultPage() {
     setError('');
 
     if (!isDraw && !winnerId) {
-      setError('Please select a winner, or mark this match as a draw.');
+      setError(
+        tournamentFormat === 'KNOCKOUT'
+          ? 'Please select a winner.'
+          : 'Please select a winner, or mark this match as a draw.'
+      );
       return;
     }
     if (scoreA === '' || scoreB === '') {

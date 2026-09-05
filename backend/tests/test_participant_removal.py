@@ -157,3 +157,44 @@ def test_player_cannot_remove_participant(client, app):
         headers=auth_headers(player_token),
     )
     assert resp.status_code == 403
+
+def test_removed_participant_standing_row_cleaned_up(client, app):
+    from app.extensions import db
+    from app.models import Player, Standing
+
+    token = register_and_login(client, "cleanupstanding@example.com")
+    tournament = create_tournament(client, token)
+    client.post(f"/api/v1/tournaments/{tournament['id']}/open-registration", headers=auth_headers(token))
+
+    with app.app_context():
+        player = Player(name="Ghost Standing Player")
+        db.session.add(player)
+        db.session.commit()
+        player_id = player.id
+
+    reg_resp = client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"player_id": player_id},
+        headers=auth_headers(token),
+    )
+    participant_id = reg_resp.json["participant_id"]
+
+    # Force a standings view, which triggers the zero-row backfill for this participant
+    client.get(f"/api/v1/tournaments/{tournament['id']}/standings")
+
+    with app.app_context():
+        existing = Standing.query.filter_by(
+            tournament_id=tournament["id"], participant_id=participant_id
+        ).first()
+        assert existing is not None  # confirm the backfill actually created it
+
+    client.delete(
+        f"/api/v1/tournaments/{tournament['id']}/participants/{participant_id}",
+        headers=auth_headers(token),
+    )
+
+    with app.app_context():
+        remaining = Standing.query.filter_by(
+            tournament_id=tournament["id"], participant_id=participant_id
+        ).first()
+        assert remaining is None

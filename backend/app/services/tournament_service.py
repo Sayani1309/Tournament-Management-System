@@ -101,8 +101,6 @@ def update_tournament(tournament_id: int, organizer_id: int, **fields) -> Tourna
 
 
 def advance_lifecycle(tournament_id: int, target_status: TournamentStatus, organizer_id: int = None) -> Tournament:
-    """The single choke point B's services should call/check against.
-    Raises InvalidTransitionError on any disallowed transition."""
     tournament = get_tournament_or_404(tournament_id)
 
     if organizer_id is not None and tournament.organizer_id != organizer_id:
@@ -111,6 +109,15 @@ def advance_lifecycle(tournament_id: int, target_status: TournamentStatus, organ
     allowed_next = ALLOWED_TRANSITIONS.get(tournament.status, set())
     if target_status not in allowed_next:
         raise InvalidTransitionError(tournament.status, target_status)
+
+    if target_status == TournamentStatus.ONGOING:
+        from app.models import TournamentParticipant
+        participant_count = TournamentParticipant.query.filter_by(tournament_id=tournament_id).count()
+        if participant_count < 2:
+            raise TournamentError(
+                "At least 2 participants must be registered before starting the tournament",
+                status_code=409,
+            )
 
     tournament.status = target_status
     db.session.commit()

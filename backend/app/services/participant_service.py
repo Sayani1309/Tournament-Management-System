@@ -105,6 +105,8 @@ def list_participants(tournament_id: int):
     )
 
 def remove_participant(tournament_id: int, participant_id: int, organizer_id: int):
+    from app.models import Standing
+
     tournament = get_tournament_or_404(tournament_id)
 
     if tournament.organizer_id != organizer_id:
@@ -126,6 +128,13 @@ def remove_participant(tournament_id: int, participant_id: int, organizer_id: in
         raise ParticipantError("This participant is not registered in this tournament", status_code=404)
 
     db.session.delete(registration)
+
+    stale_standing = Standing.query.filter_by(
+        tournament_id=tournament_id, participant_id=participant_id
+    ).first()
+    if stale_standing:
+        db.session.delete(stale_standing)
+
     db.session.commit()
 
 def list_my_tournaments(user_id: int):

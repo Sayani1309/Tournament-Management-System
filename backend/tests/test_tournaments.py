@@ -147,3 +147,30 @@ def test_filter_tournaments_by_status(client):
 def test_filter_tournaments_by_invalid_status_rejected(client):
     resp = client.get("/api/v1/tournaments?status=NOT_A_REAL_STATUS")
     assert resp.status_code == 400
+
+def test_cannot_start_with_fewer_than_two_participants(client, app):
+    from app.models import Player
+    from app.extensions import db
+
+    token = register_and_login(client, "startguard@example.com", "ORGANIZER")
+    tournament = client.post(
+        "/api/v1/tournaments",
+        json={"name": "Guard Test", "sport": "Chess", "format": "ROUND_ROBIN", "participant_type": "INDIVIDUAL"},
+        headers=auth_headers(token),
+    ).json
+    client.post(f"/api/v1/tournaments/{tournament['id']}/open-registration", headers=auth_headers(token))
+
+    with app.app_context():
+        player = Player(name="Solo Player")
+        db.session.add(player)
+        db.session.commit()
+        player_id = player.id
+
+    client.post(
+        f"/api/v1/tournaments/{tournament['id']}/participants",
+        json={"player_id": player_id},
+        headers=auth_headers(token),
+    )
+
+    resp = client.post(f"/api/v1/tournaments/{tournament['id']}/start", headers=auth_headers(token))
+    assert resp.status_code == 409
