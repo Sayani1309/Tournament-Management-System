@@ -21,6 +21,7 @@ import { listPlayers } from '../api/playerApi';
 import { listTeams } from '../api/teamApi';
 import { listVenues } from '../api/venueApi';
 import { getErrorMessage } from '../utils/errorMessage';
+import LoadingOverlay from '../components/common/LoadingOverlay';
 
 function matchLabel(participants) {
   if (participants.length === 2) return `${participants[0].name} vs ${participants[1].name}`;
@@ -199,6 +200,7 @@ export default function TournamentManagementPage() {
 
   return (
     <AppShell>
+      <LoadingOverlay show={actionLoading} />
       <div className="mb-6">
         <div className="flex items-center gap-4 mb-2 flex-wrap">
           <h1 className="text-3xl text-text-primary">{tournament.name}</h1>
