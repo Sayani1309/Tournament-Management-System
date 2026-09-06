@@ -7,8 +7,8 @@ export default function TournamentList({ tournaments }) {
   }
   return (
     <div className="flex gap-4 overflow-x-auto pb-2">
-      {tournaments.map((t, i) => (
-        <TournamentCard key={t.id} tournament={t} colorIndex={i} />
+      {tournaments.map((t) => (
+        <TournamentCard key={t.id} tournament={t} />
       ))}
     </div>
   );

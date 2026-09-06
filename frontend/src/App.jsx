@@ -20,6 +20,7 @@ import CreateVenuePage from './pages/CreateVenuePage';
 import NotFoundPage from './pages/NotFoundPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import PlayerTeamSettingsPage from './pages/PlayerTeamSettingsPage';
 
 function App() {
   return (
@@ -88,6 +89,14 @@ function App() {
             element={
               <ProtectedRoute requiredRole="ORGANIZER">
                 <CreateVenuePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/player/team-settings"
+            element={
+              <ProtectedRoute requiredRole="PLAYER">
+                <PlayerTeamSettingsPage />
               </ProtectedRoute>
             }
           />

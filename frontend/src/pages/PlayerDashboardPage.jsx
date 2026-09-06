@@ -6,6 +6,8 @@ import ErrorBanner from '../components/common/ErrorBanner';
 import { getMyTournaments } from '../api/authApi';
 import { getErrorMessage } from '../utils/errorMessage';
 import { useAuth } from '../hooks/useAuth';
+import { Link } from 'react-router-dom';
+import Button from '../components/common/Button';
 
 export default function PlayerDashboardPage() {
   const { user } = useAuth();
@@ -33,12 +35,22 @@ export default function PlayerDashboardPage() {
 
   return (
     <AppShell>
-      <div className="bg-gradient-to-r from-bg-secondary to-accent rounded-3xl p-8 mb-8">
-        <h1 className="text-3xl text-text-primary">Hello, {user?.name}</h1>
-        <p className="text-text-secondary mt-2">
-          Your tournaments, upcoming and past.
-          {user?.team_name && ` · Team: ${user.team_name}`}
-        </p>
+      <div className="bg-gradient-to-r from-bg-secondary to-accent rounded-3xl p-8 mb-8 flex justify-between items-center flex-wrap gap-4">
+        <div>
+          <h1 className="text-3xl text-text-primary">Hello, {user?.name}</h1>
+          <p className="text-text-secondary mt-2">
+            Your tournaments, upcoming and past.
+            {user?.team_name && ` · Team: ${user.team_name}`}
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <Link to="/player/team-settings">
+            <Button variant="secondary">Team Settings</Button>
+          </Link>
+          <Link to="/">
+            <Button variant="secondary">Browse Tournaments</Button>
+          </Link>
+        </div>
       </div>
 
       <ErrorBanner message={error} />
