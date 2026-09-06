@@ -41,6 +41,15 @@ def setup_two_player_match(client, app, email):
         mps = MatchParticipant.query.filter_by(match_id=match_id).all()
         participant_ids = [mp.participant_id for mp in mps]
 
+    venue_resp = client.post(
+        "/api/v1/venues", json={"name": "Test Venue", "location": "Test City"}, headers=auth_headers(token)
+    )
+    client.put(
+        f"/api/v1/matches/{match_id}/schedule",
+        json={"venue_id": venue_resp.json["id"], "scheduled_at": "2030-01-01T10:00:00+00:00"},
+        headers=auth_headers(token),
+    )
+
     return token, tournament["id"], match_id, participant_ids
 
 

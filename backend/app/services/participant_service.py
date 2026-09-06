@@ -4,18 +4,23 @@ from app.constants.enums import ParticipationType, TournamentStatus
 from app.services.tournament_service import get_tournament_or_404, TournamentError
 
 def get_participant_display(participant) -> dict:
-    """Returns {"id", "type", "name"} for a Participant — the name resolved from
-    the underlying Player or Team. Used anywhere a Participant needs to be shown
-    to a human instead of just a raw ID (match listings, results, standings)."""
     if participant is None:
-        return {"id": None, "type": None, "name": None}
+        return {"id": None, "type": None, "name": None, "player_id": None, "team_id": None}
     if participant.player_id is not None:
         player = db.session.get(Player, participant.player_id)
-        return {"id": participant.id, "type": "INDIVIDUAL", "name": player.name if player else None}
+        return {
+            "id": participant.id, "type": "INDIVIDUAL",
+            "name": player.name if player else None,
+            "player_id": participant.player_id, "team_id": None,
+        }
     if participant.team_id is not None:
         team = db.session.get(Team, participant.team_id)
-        return {"id": participant.id, "type": "TEAM", "name": team.name if team else None}
-    return {"id": participant.id, "type": None, "name": None}
+        return {
+            "id": participant.id, "type": "TEAM",
+            "name": team.name if team else None,
+            "player_id": None, "team_id": participant.team_id,
+        }
+    return {"id": participant.id, "type": None, "name": None, "player_id": None, "team_id": None}
 class ParticipantError(Exception):
     def __init__(self, message, status_code=400):
         super().__init__(message)
@@ -176,3 +181,77 @@ def list_my_tournaments(user_id: int):
     past = [t for t in tournaments if t.status == TournamentStatus.COMPLETED]
 
     return {"upcoming": upcoming, "past": past}
+
+def get_player_achievements(player_id: int) -> list:
+    """Returns tournaments this player won, either individually or as part of
+    the team they currently belong to. Team-based wins are matched against the
+    player's *current* team — if a player has since left the winning team,
+    this won't retroactively credit them, and vice versa if they've joined a
+    team that won before they joined. This is a known simplification: the
+    system doesn't track historical team rosters."""
+    from app.models import Tournament, Player, MatchResult, Match
+    from app.constants.enums import TournamentStatus, TournamentFormat
+
+    player = db.session.get(Player, player_id)
+    if not player:
+        return []
+
+    my_participant_ids = set()
+
+    individual = Participant.query.filter_by(
+        type=ParticipationType.INDIVIDUAL, player_id=player_id
+    ).first()
+    if individual:
+        my_participant_ids.add(individual.id)
+
+    if player.team_id:
+        team_participant = Participant.query.filter_by(
+            type=ParticipationType.TEAM, team_id=player.team_id
+        ).first()
+        if team_participant:
+            my_participant_ids.add(team_participant.id)
+
+    if not my_participant_ids:
+        return []
+
+    achievements = []
+    completed_tournaments = Tournament.query.filter_by(status=TournamentStatus.COMPLETED).all()
+
+    for tournament in completed_tournaments:
+        registration = TournamentParticipant.query.filter(
+            TournamentParticipant.tournament_id == tournament.id,
+            TournamentParticipant.participant_id.in_(my_participant_ids),
+        ).first()
+        if not registration:
+            continue
+
+        winner_participant_id = None
+
+        if tournament.format == TournamentFormat.ROUND_ROBIN:
+            from app.services.standings_service import list_standings
+            standings = list_standings(tournament.id)
+            if standings:
+                winner_participant_id = standings[0][0].participant_id
+        else:  # KNOCKOUT
+            matches = Match.query.filter_by(tournament_id=tournament.id).all()
+            if matches:
+                def round_num(m):
+                    import re
+                    match_obj = re.match(r"Round (\d+)", m.round)
+                    return int(match_obj.group(1)) if match_obj else 0
+                final_round = max(round_num(m) for m in matches)
+                final_matches = [m for m in matches if round_num(m) == final_round]
+                if final_matches:
+                    result = MatchResult.query.filter_by(match_id=final_matches[0].id).first()
+                    if result:
+                        winner_participant_id = result.winner_participant_id
+
+        if winner_participant_id in my_participant_ids:
+            achievements.append({
+                "tournament_id": tournament.id,
+                "tournament_name": tournament.name,
+                "sport": tournament.sport,
+                "format": tournament.format.value,
+            })
+
+    return achievements

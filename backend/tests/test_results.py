@@ -42,6 +42,15 @@ def setup_match(client, app, email):
         mps = MatchParticipant.query.filter_by(match_id=match_id).all()
         participant_ids = [mp.participant_id for mp in mps]
 
+    venue_resp = client.post(
+        "/api/v1/venues", json={"name": "Test Venue", "location": "Test City"}, headers=auth_headers(token)
+    )
+    client.put(
+        f"/api/v1/matches/{match_id}/schedule",
+        json={"venue_id": venue_resp.json["id"], "scheduled_at": "2030-01-01T10:00:00+00:00"},
+        headers=auth_headers(token),
+    )
+
     return token, match_id, participant_ids
 
 
@@ -223,6 +232,15 @@ def test_knockout_match_cannot_be_draw(client, app):
     matches = client.post(f"/api/v1/tournaments/{tournament['id']}/fixtures", headers=auth_headers(token)).json
     match_id = matches[0]["id"]
     participant_ids = [p["id"] for p in matches[0]["participants"]]
+
+    venue_resp = client.post(
+        "/api/v1/venues", json={"name": "KO Draw Venue", "location": "City"}, headers=auth_headers(token)
+    )
+    client.put(
+        f"/api/v1/matches/{match_id}/schedule",
+        json={"venue_id": venue_resp.json["id"], "scheduled_at": "2030-01-01T10:00:00+00:00"},
+        headers=auth_headers(token),
+    )
 
     resp = client.post(
         f"/api/v1/matches/{match_id}/result",

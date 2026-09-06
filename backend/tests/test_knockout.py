@@ -41,6 +41,14 @@ def setup_knockout_tournament(client, app, count, email):
 
 
 def submit_win(client, token, match_id, winner_id, loser_id):
+    venue_resp = client.post(
+        "/api/v1/venues", json={"name": f"Venue {match_id}", "location": "City"}, headers=auth_headers(token)
+    )
+    client.put(
+        f"/api/v1/matches/{match_id}/schedule",
+        json={"venue_id": venue_resp.json["id"], "scheduled_at": "2030-01-01T10:00:00+00:00"},
+        headers=auth_headers(token),
+    )
     return client.post(
         f"/api/v1/matches/{match_id}/result",
         json={

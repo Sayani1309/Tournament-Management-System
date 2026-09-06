@@ -187,6 +187,7 @@ def list_matches(tournament_id: int):
     return Match.query.filter_by(tournament_id=tournament_id).order_by(Match.id).all()
 
 def update_match_schedule(match_id: int, organizer_id: int, venue_id: int = None, scheduled_at=None):
+    from datetime import datetime, timezone
     from app.models import Venue
 
     match = get_match_or_404(match_id)
@@ -205,6 +206,10 @@ def update_match_schedule(match_id: int, organizer_id: int, venue_id: int = None
         match.venue_id = venue_id
 
     if scheduled_at is not None:
+        if scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        if scheduled_at < datetime.now(timezone.utc):
+            raise FixtureError("Cannot schedule a match in the past", status_code=400)
         match.scheduled_at = scheduled_at
 
     db.session.commit()
