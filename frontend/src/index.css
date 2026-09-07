@@ -10,3 +10,8 @@
   --color-text-primary: #f2e8e0;
   --color-text-secondary: #d98878;
 }
+
+.app-gradient-bg {
+  background: linear-gradient(135deg, #5c2a2f 0%, #4a1f24 45%, #2a1216 100%);
+  min-height: 100vh;
+}

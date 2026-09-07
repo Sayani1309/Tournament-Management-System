@@ -83,6 +83,11 @@ export default function MatchScoreCardPage() {
         <div className="flex flex-col gap-4">
           {match.participants.map((p) => {
             const isWinner = result?.winner?.id === p.id;
+            const linkPath = p.player_id
+              ? `/players/${p.player_id}/profile`
+              : p.team_id
+              ? `/teams/${p.team_id}/roster`
+              : null;
             return (
               <div
                 key={p.id}
@@ -91,7 +96,13 @@ export default function MatchScoreCardPage() {
                 }`}
               >
                 <div>
-                  <p className="text-text-primary text-lg font-semibold">{p.name}</p>
+                  {linkPath ? (
+                    <Link to={linkPath} className="text-text-primary text-lg font-semibold hover:underline">
+                      {p.name}
+                    </Link>
+                  ) : (
+                    <p className="text-text-primary text-lg font-semibold">{p.name}</p>
+                  )}
                   <p className="text-text-secondary text-xs">{p.type}</p>
                 </div>
                 <div className="text-text-primary text-3xl font-bold">

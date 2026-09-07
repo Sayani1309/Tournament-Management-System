@@ -21,6 +21,8 @@ import NotFoundPage from './pages/NotFoundPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import PlayerTeamSettingsPage from './pages/PlayerTeamSettingsPage';
+import PlayerProfilePage from './pages/PlayerProfilePage';
+import TeamRosterPage from './pages/TeamRosterPage';
 
 function App() {
   return (
@@ -40,7 +42,9 @@ function App() {
           <Route path="/venues" element={<VenueListPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
-
+          <Route path="/players/:id/profile" element={<PlayerProfilePage />} />
+          <Route path="/teams/:id/roster" element={<TeamRosterPage />} />
+          
           {/* Player-only routes */}
           <Route
             path="/player/dashboard"

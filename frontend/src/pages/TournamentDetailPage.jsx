@@ -160,7 +160,7 @@ export default function TournamentDetailPage() {
         ))}
       </div>
 
-      {activeTab === 'Participants' && <ParticipantList participants={participants} />}
+      {activeTab === 'Participants' && (<ParticipantList participants={participants} venues={venues}/>)}
       {activeTab === 'Fixtures' && <MatchList matches={matches} venues={venues} />}
       {activeTab === 'Standings' && (
         <>

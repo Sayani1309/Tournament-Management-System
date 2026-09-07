@@ -2,18 +2,26 @@ import { Link } from 'react-router-dom';
 import EmptyState from '../common/EmptyState';
 import StatusBadge from '../common/StatusBadge';
 
-function matchLabel(participants) {
-  if (participants.length === 2) return `${participants[0].name} vs ${participants[1].name}`;
-  if (participants.length === 1) return `${participants[0].name} vs TBA`;
-  return 'TBA vs TBA';
-}
-
 function formatSchedule(scheduledAt) {
   if (!scheduledAt) return null;
   return new Date(scheduledAt).toLocaleString(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
   });
+}
+
+function ParticipantLink({ p }) {
+  const path = p.player_id
+    ? `/players/${p.player_id}/profile`
+    : p.team_id
+    ? `/teams/${p.team_id}/roster`
+    : null;
+  if (!path) return <span>{p.name}</span>;
+  return (
+    <Link to={path} onClick={(e) => e.stopPropagation()} className="hover:underline">
+      {p.name}
+    </Link>
+  );
 }
 
 export default function MatchList({ matches, venues = [] }) {
@@ -36,7 +44,19 @@ export default function MatchList({ matches, venues = [] }) {
           >
             <div>
               <div className="text-text-secondary text-xs mb-1">{m.round}</div>
-              <div className="text-text-primary">{matchLabel(m.participants)}</div>
+              <div className="text-text-primary">
+                {m.participants.length === 2 ? (
+                  <>
+                    <ParticipantLink p={m.participants[0]} /> vs <ParticipantLink p={m.participants[1]} />
+                  </>
+                ) : m.participants.length === 1 ? (
+                  <>
+                    <ParticipantLink p={m.participants[0]} /> vs TBA
+                  </>
+                ) : (
+                  'TBA vs TBA'
+                )}
+              </div>
               {(venue || schedule) && (
                 <div className="text-text-secondary text-xs mt-1">
                   {venue && <span>📍 {venue}</span>}

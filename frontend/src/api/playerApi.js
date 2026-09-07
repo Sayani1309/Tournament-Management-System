@@ -11,3 +11,7 @@ export function getPlayer(id) {
 export function updatePlayerTeam(id, teamId) {
   return client.put(`/players/${id}/team`, { team_id: teamId });
 }
+
+export function getPlayerProfile(id) {
+  return client.get(`/players/${id}/profile`);
+}

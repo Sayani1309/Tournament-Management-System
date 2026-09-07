@@ -29,6 +29,38 @@ function matchLabel(participants) {
   return 'TBA vs TBA';
 }
 
+function ParticipantLink({ p }) {
+  const path = p.player_id
+    ? `/players/${p.player_id}/profile`
+    : p.team_id
+    ? `/teams/${p.team_id}/roster`
+    : null;
+  if (!path) return <span>{p.name}</span>;
+  return (
+    <Link to={path} onClick={(e) => e.stopPropagation()} className="hover:underline">
+      {p.name}
+    </Link>
+  );
+}
+
+function MatchParticipants({ participants }) {
+  if (participants.length === 2) {
+    return (
+      <>
+        <ParticipantLink p={participants[0]} /> vs <ParticipantLink p={participants[1]} />
+      </>
+    );
+  }
+  if (participants.length === 1) {
+    return (
+      <>
+        <ParticipantLink p={participants[0]} /> vs TBA
+      </>
+    );
+  }
+  return <>TBA vs TBA</>;
+}
+
 function MatchScheduleRow({ match, venues, onScheduled }) {
   const [venueId, setVenueId] = useState(match.venue_id || '');
   const [scheduledAt, setScheduledAt] = useState(
@@ -58,12 +90,32 @@ function MatchScheduleRow({ match, venues, onScheduled }) {
       <div className="flex justify-between items-center mb-2">
         <div>
           <div className="text-text-secondary text-xs mb-1">{match.round}</div>
-          <div className="text-text-primary">{matchLabel(match.participants)}</div>
+          <div className="text-text-primary">
+            {match.participants.length === 2 ? (
+              <>
+                <Link to={match.participants[0].player_id ? `/players/${match.participants[0].player_id}/profile` : `/teams/${match.participants[0].team_id}/roster`} onClick={(e) => e.stopPropagation()} className="hover:underline">
+                  {match.participants[0].name}
+                </Link>
+                {' vs '}
+                <Link to={match.participants[1].player_id ? `/players/${match.participants[1].player_id}/profile` : `/teams/${match.participants[1].team_id}/roster`} onClick={(e) => e.stopPropagation()} className="hover:underline">
+                  {match.participants[1].name}
+                </Link>
+              </>
+            ) : (
+              matchLabel(match.participants)
+            )}
+          </div>
         </div>
         {match.status === 'SCHEDULED' && match.participants.length === 2 ? (
-          <Link to={`/organizer/matches/${match.id}/result`}>
-            <Button>Enter Result</Button>
-          </Link>
+          match.venue_id && match.scheduled_at ? (
+            <Link to={`/organizer/matches/${match.id}/result`}>
+              <Button>Enter Result</Button>
+            </Link>
+          ) : (
+            <Button disabled title="Set a venue and schedule first">
+              Enter Result
+            </Button>
+          )
         ) : (
           <StatusBadge status={match.status} />
         )}
