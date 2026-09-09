@@ -38,11 +38,17 @@ requirements specification.
 
 ## Backend Status
 
-**Complete.** All functional requirements (FR-01–FR-07) and all three change requests
-(CR-001 guest access, CR-002 player self-registration, CR-003 auth hardening) are
-implemented, covered by 94 automated tests, and additionally verified through two
+**Complete.** All functional requirements (FR-01–FR-07) and all eight change requests
+(CR-001 guest access, CR-002 player self-registration, CR-003 auth hardening, CR-004
+post-build hardening, CR-005 match scheduling, CR-006 minimum participants, CR-007
+individual-only self-registration, CR-008 player achievements/profile) are
+implemented, covered by 113 automated tests, and additionally verified through two
 manual end-to-end integration scenarios against the live API. See
-`docs/traceability.md` for the full requirement-to-implementation mapping.
+`docs/traceability-matrix.md` for the full requirement-to-implementation mapping.
+
+**Frontend:** Also complete — a React (Vite) SPA under `frontend/` covering guest
+browsing, player/organizer auth, tournament management, participant registration,
+fixtures, results entry, and standings.
 
 ---
 
@@ -67,8 +73,8 @@ tournament-management-system/
 └── docs/
     ├── SRS.md
     ├── change-log.md
-    ├── traceability.md
-    └── diagrams/          # pending — see traceability.md
+    ├── traceability-matrix.md
+    └── diagrams/          # pending — see traceability-matrix.md
 ```
 
 ---
@@ -150,7 +156,7 @@ Always run from inside `backend/`:
 ```bash
 python -m pytest -v
 ```
-Expect all 94 tests to pass.
+Expect all 113 tests to pass.
 
 ### 10. Manual integration test scripts (optional)
 `backend/scripts/scenario_a.ps1` (round-robin) and `scenario_b.ps1` (knockout) run a
@@ -175,6 +181,7 @@ role, plus tournament ownership for tournament-scoped writes.
 | `/auth/forgot-password` | POST | Public | Dev mode returns `dev_token` |
 | `/auth/reset-password` | POST | Public | |
 | `/auth/verify-email` | GET | Public (`?token=`) | |
+| `/auth/me/tournaments` | GET | JWT required | `{"upcoming": [...], "past": [...]}` — logged-in player's tournaments |
 
 **Registration rules:** `role=ORGANIZER` accepts only name/email/password/role.
 `role=PLAYER` additionally requires `participation_type` (`INDIVIDUAL`/`TEAM`); if
@@ -199,6 +206,7 @@ record is created automatically; organizers never create Player/Team records.
 | `/players` | GET | **Public** | Paginated |
 | `/players/{id}` | GET | **Public** | |
 | `/players/{id}/team` | PUT | Player (self) or Organizer | Set `team_id: null` to leave a team |
+| `/players/{id}/profile` | GET | **Public** | Includes tournament-win achievements (CR-008) |
 | `/teams` | GET | **Public** | Paginated |
 | `/teams/{id}` | GET | **Public** | |
 
@@ -210,7 +218,9 @@ record is created automatically; organizers never create Player/Team records.
 | `/tournaments/{id}/participants/{pid}` | DELETE | Organizer (owner) | Only before ONGOING |
 | `/tournaments/{id}/fixtures` | POST | Organizer (owner) | Requires ONGOING; one-time |
 | `/tournaments/{id}/matches` | GET | **Public** | Includes participant names |
-| `/matches/{id}/result` | POST | Organizer (owner) | Transactional; organizer-only, no player path |
+| `/matches/{id}` | GET | **Public** | Standalone single-match lookup (CR-005) |
+| `/matches/{id}/schedule` | PUT | Organizer (owner) | Sets `venue_id`/`scheduled_at`; rejects past dates (CR-005) |
+| `/matches/{id}/result` | POST | Organizer (owner) | Transactional; organizer-only, no player path; requires venue + schedule set (CR-005) |
 | `/matches/{id}/result` | GET | **Public** | |
 | `/tournaments/{id}/standings` | GET | **Public** | Ordered: points → score diff → total score → name |
 
@@ -251,6 +261,13 @@ round-robin match's result is submitted.
   be enabled in production.
 - Email verification is tracked (`is_verified`) but not enforced — unverified accounts
   can still log in and use the system.
+- `TokenBlocklist` entries are not purged automatically on a schedule; a
+  `TokenBlocklist.purge_expired()` utility exists but must be invoked manually or from
+  a future maintenance job.
+- Player achievement attribution (`/players/{id}/profile`) does not track historical
+  team rosters — a team-based tournament win is credited against whichever team a
+  player currently belongs to, not the roster at the time the tournament was won. See
+  `docs/SRS.md` §12.3 for the full rationale.
 
 ---
 
@@ -259,8 +276,8 @@ round-robin match's result is submitted.
 - Never commit `.env` — verify with `git status` before every commit
 - Shared files requiring coordination before editing: `app/constants/enums.py`,
   `app/models/__init__.py`, `app/__init__.py`
-- Update `docs/traceability.md` when a feature's implementation and tests are both
-  complete, not at the end of the project
+- Update `docs/traceability-matrix.md` when a feature's implementation and tests are
+  both complete, not at the end of the project
 - Log any requirement change in `docs/change-log.md` before implementing it
 - The dev server does not hot-reload by default — restart it (or run with `--debug`)
   after changing backend code before testing manually
@@ -271,5 +288,5 @@ round-robin match's result is submitted.
 
 - [`docs/SRS.md`](docs/SRS.md) — full requirements specification
 - [`docs/change-log.md`](docs/change-log.md) — record of requirement changes since baseline
-- [`docs/traceability.md`](docs/traceability.md) — requirement → design → implementation → test mapping
-- [`docs/diagrams/`](docs/diagrams/) — ER diagram, class diagram, sequence diagrams, activity diagrams (pending — next documentation task)
+- [`docs/traceability-matrix.md`](docs/traceability-matrix.md) — requirement → design → implementation → test mapping
+- [`docs/diagrams/`](docs/diagrams/) — ER diagram, class diagram, sequence diagrams, activity diagrams (pending — referenced in `docs/SRS.md` §17, but the directory doesn't exist in the repo yet — see `docs/traceability-matrix.md` "Remaining before final submission")

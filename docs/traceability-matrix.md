@@ -3,6 +3,9 @@
 This matrix links each functional requirement to its design artifact, implementation
 file, and test file, per SRS §43. Updated as each feature is completed.
 
+**Last synced with:** `docs/SRS.md`, "Last updated: 2026-09-04 (incorporates CR-001
+through CR-008)."
+
 **Status legend:** ✅ Done · 🟡 In progress · ⬜ Not started
 
 ---
@@ -28,9 +31,14 @@ file, and test file, per SRS §43. Updated as each feature is completed.
 |---|---|---|---|---|
 | CR-001 | Guest (unauthenticated) read access to all tournament data | No auth decorator on any GET route across all blueprints | Guest-access tests across all test files | ✅ |
 | CR-002 | Player self-registration (individual/team, new/existing team); organizers barred from player/team fields | `auth_service.py::register_user()`, `auth_schema.py` role-specific validation, `team_routes.py`, `player_routes.py` | `test_auth.py` (7 tests) | ✅ |
-| CR-003 | Logout/token revocation, password reset, email verification, pagination, rate limiting | `token_blocklist.py`, `password_reset_token.py`, `email_verification_token.py`, `utils/pagination.py`, `extensions.py` (limiter) | New tests across `test_auth.py`; pagination-shape fixes in `test_tournaments.py` | ✅ |
+| CR-003 | Logout/token revocation, password reset, email verification, pagination, rate limiting (register limit raised 5→20/min post-integration-testing) | `token_blocklist.py`, `password_reset_token.py`, `email_verification_token.py`, `utils/pagination.py`, `extensions.py` (limiter) | New tests across `test_auth.py`; pagination-shape fixes in `test_tournaments.py` | ✅ |
+| CR-004 | Post-build hardening: ownership checks, FK indexes, cascade deletes, standings backfill/cleanup, single-item GET routes, player-team update, CORS allowlist | See itemized breakdown in **Post-Build Hardening** table below | See itemized breakdown below | ✅ |
+| CR-005 | Match scheduling: venue + time required before result entry, past-date rejection, standalone `GET /matches/{id}` | `fixture_service.py::update_match_schedule()`, `match_routes.py::put_match_schedule()` (`PUT /matches/{id}/schedule`), `match_routes.py::get_match()` (`GET /matches/{id}`); schedule presence checked in `result_service.py::submit_result()` | `test_fixtures.py::test_organizer_can_schedule_match_venue_and_time`, `::test_other_organizer_cannot_schedule_match`, `::test_get_single_match`, `::test_get_nonexistent_match_returns_404`; `test_gaps_round2.py::test_cannot_schedule_match_in_past`, `::test_cannot_submit_result_without_schedule` | ✅ |
+| CR-006 | Minimum two participants required before `REGISTRATION_OPEN → ONGOING` | `tournament_service.py::advance_lifecycle()` — participant-count check when `target_status == ONGOING` | `test_tournaments.py::test_cannot_start_with_fewer_than_two_participants` | ✅ |
+| CR-007 | Player self-registration restricted to `INDIVIDUAL` tournaments only; team registration remains organizer-only in all cases | `participant_service.py::register_participant()` — `PLAYER` role branch (self-only, `INDIVIDUAL`-only, no `team_id`) | `test_participants.py::test_player_can_self_register_for_individual_tournament`, `::test_player_cannot_self_register_for_team_tournament`, `::test_player_cannot_register_someone_else`, `::test_player_cannot_register_a_team` | ✅ |
+| CR-008 | Player achievements and public player profile | `participant_service.py::get_player_achievements()`, `player_routes.py::get_player_profile()` (`GET /players/{id}/profile`) | `test_gaps_round2.py::test_player_profile_shows_achievement_after_winning` | ✅ |
 
-## Post-Build Hardening (Codebase Gap Review)
+## Post-Build Hardening (Codebase Gap Review) — detail for CR-004
 
 | # | Issue | Fix | Test | Status |
 |---|---|---|---|---|
@@ -60,7 +68,11 @@ Two full end-to-end scenarios run against the live dev server via the actual HTT
 - **Scenario A** (`scripts/scenario_a.ps1`) — 5-player round-robin tournament, full lifecycle: registration → open-registration → participant registration → start → fixture generation (10 matches) → result submission → automatic standings computation → automatic completion → guest read access at every stage. **Result: fully correct**, standings math verified by hand.
 - **Scenario B** (`scripts/scenario_b.ps1`) — 6-player knockout tournament (8-slot bracket, 2 byes): bye auto-completion, Round 1 → Round 2 → Final winner advancement, champion determination, automatic completion, no third-place match generated. **Result: fully correct.**
 
-**Bugs found and fixed during integration testing** (none of these were caught by the 94 unit/route-level pytest tests, since all of them only surface when exercised through a real multi-step API flow with real data):
+**Bugs found and fixed during integration testing** (none of these were caught by the
+unit/route-level pytest suite as it stood at the time, since all of them only surface
+when exercised through a real multi-step API flow with real data). The first is now
+tracked formally under CR-004; the second under the CR-003 addendum in
+`docs/change-log.md`:
 
 | Bug | Fix |
 |---|---|
@@ -74,20 +86,23 @@ Two full end-to-end scenarios run against the live dev server via the actual HTT
 
 ## Summary
 
-All functional requirements (FR-01–FR-07), all three change requests (CR-001–CR-003),
-all 9 post-build hardening fixes, and both polish/integration phases are complete.
-**94 automated tests passing**, plus 2 manual end-to-end integration scenarios verified
-against the live API.
+All functional requirements (FR-01–FR-07) and all eight change requests (CR-001–CR-008)
+are complete. **113 automated tests passing**, plus 2 manual end-to-end integration
+scenarios verified against the live API. Known limitations (in-memory rate limiting,
+unscheduled blocklist purging, dev-only token exposure, non-historical team-roster
+achievement attribution) are documented in `docs/SRS.md` §1.3 and §13 rather than
+treated as open defects.
 
 ## Remaining before final submission
 
-- **Diagrams (§44):** ER diagram, class diagram, sequence diagrams (auth, fixture
-  generation, result → standings), activity diagrams (tournament lifecycle, knockout
-  progression). Schema and service interactions are now fully finalized — no further
-  revision expected before drawing these.
-- **Frontend integration (P3):** React screens for auth, tournament browsing (guest),
-  tournament management (organizer), participant registration, fixtures, results entry,
-  standings display.
-- **Documentation of known limitations:** Flask-Limiter uses in-memory storage (resets
-  on server restart, not suitable for multi-process deployment) — acceptable for this
-  project's scope, should be noted in the SRS as a deployment consideration.
+- **Diagrams (§17):** `docs/SRS.md` now references `docs/diagrams/context-diagram.svg`,
+  `docs/diagrams/er-diagram.svg`, and related sequence/activity diagrams as the
+  canonical source, but no `docs/diagrams/` directory exists in the repository yet —
+  this is the one item in the SRS that is currently aspirational rather than reflecting
+  the actual repo state. Schema and service interactions are fully finalized, so
+  nothing blocks drawing these.
+- **Frontend integration (P3):** ✅ Done since this matrix was last updated — a full
+  React (Vite) frontend now exists under `frontend/src/`, covering guest browsing,
+  player/organizer auth, tournament management, participant registration, fixture and
+  standings display, and match result entry (23 pages, 6 API modules, shared
+  `AuthContext`). Not yet broken out into its own FR-tracked rows in this matrix.
