@@ -22,6 +22,7 @@ import { listTeams } from '../api/teamApi';
 import { listVenues } from '../api/venueApi';
 import { getErrorMessage } from '../utils/errorMessage';
 import LoadingOverlay from '../components/common/LoadingOverlay';
+import Toast from '../components/common/Toast';
 
 function matchLabel(participants) {
   if (participants.length === 2) return `${participants[0].name} vs ${participants[1].name}`;
@@ -68,6 +69,7 @@ function MatchScheduleRow({ match, venues, onScheduled }) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [savedFlash, setSavedFlash] = useState(false);
 
   async function handleSave() {
     setError('');
@@ -77,6 +79,8 @@ function MatchScheduleRow({ match, venues, onScheduled }) {
       if (venueId) payload.venue_id = Number(venueId);
       if (scheduledAt) payload.scheduled_at = new Date(scheduledAt).toISOString();
       await scheduleMatch(match.id, payload);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 2000);
       onScheduled();
     } catch (err) {
       setError(getErrorMessage(err));
@@ -149,6 +153,7 @@ function MatchScheduleRow({ match, venues, onScheduled }) {
           <Button variant="secondary" onClick={handleSave} disabled={saving}>
             {saving ? 'Saving...' : 'Save Schedule'}
           </Button>
+          {savedFlash && <span className="text-text-primary text-sm">✓ Saved</span>}
         </div>
       )}
     </div>

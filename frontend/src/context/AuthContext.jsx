@@ -16,11 +16,14 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      clearAuth();
-    });
-  }, [clearAuth]);
+useEffect(() => {
+  setUnauthorizedHandler(() => {
+    clearAuth();
+    if (window.location.pathname !== '/auth') {
+      window.location.href = '/auth';
+    }
+  });
+}, [clearAuth]);
 
   useEffect(() => {
     async function loadUser() {

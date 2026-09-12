@@ -23,9 +23,11 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import PlayerTeamSettingsPage from './pages/PlayerTeamSettingsPage';
 import PlayerProfilePage from './pages/PlayerProfilePage';
 import TeamRosterPage from './pages/TeamRosterPage';
+import ErrorBoundary from './components/layout/ErrorBoundary';
 
 function App() {
   return (
+   <ErrorBoundary>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
@@ -108,6 +110,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+  </ErrorBoundary>
   );
 }
 
