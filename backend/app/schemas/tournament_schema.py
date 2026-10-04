@@ -5,7 +5,7 @@ from app.constants.enums import TournamentFormat, ParticipationType, TournamentS
 
 class TournamentCreateSchema(Schema):
     name = fields.Str(required=True, validate=validate.Length(min=1, max=200))
-    description = fields.Str(required=False, allow_none=True)
+    description = fields.Str(required=False, allow_none=True, validate=validate.Length(max=2000))
     sport = fields.Str(required=True, validate=validate.Length(min=1, max=100))
     format = fields.Str(required=True, validate=validate.OneOf([f.value for f in TournamentFormat]))
     participant_type = fields.Str(
@@ -17,8 +17,8 @@ class TournamentCreateSchema(Schema):
 
 class TournamentUpdateSchema(Schema):
     name = fields.Str(required=False, allow_none=True, validate=validate.Length(min=1, max=200))
-    description = fields.Str(required=False, allow_none=True)
-    sport = fields.Str(required=False, allow_none=True)
+    description = fields.Str(required=False, allow_none=True, validate=validate.Length(max=2000))
+    sport = fields.Str(required=False, allow_none=True, validate=validate.Length(min=1, max=100))
     format = fields.Str(required=False, allow_none=True, validate=validate.OneOf([f.value for f in TournamentFormat]))
     participant_type = fields.Str(
         required=False, allow_none=True, validate=validate.OneOf([p.value for p in ParticipationType])

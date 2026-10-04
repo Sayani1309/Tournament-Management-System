@@ -374,7 +374,7 @@ enforced** — an unverified user can still log in and use the system normally.
 | Endpoint | Limit |
 |---|---|
 | `POST /auth/login` | 5 per minute per IP |
-| `POST /auth/register` | 20 per minute per IP |
+| `POST /auth/register` | 5 per minute per IP |
 
 `/auth/register`'s limit was raised from an initial 5/minute after integration testing
 showed 5/minute was unrealistically tight for an organizer performing legitimate bulk
@@ -597,7 +597,7 @@ Business logic resides in the service layer, not in route functions.
 
 ## 16. Testing Summary
 
-- **116 automated tests** (pytest), covering models, services, and routes across every
+- **120 automated tests** (pytest), covering models, services, and routes across every
   functional requirement, change request, and hardening fix described in this document.
 - **2 manual end-to-end integration scenarios** run against the live API (documented in
   `backend/scripts/scenario_a.ps1`, `scenario_b.ps1`): a full round-robin lifecycle and

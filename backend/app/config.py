@@ -10,6 +10,8 @@ class Config:
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=24)
     CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
     RATELIMIT_ENABLED = True
+    MAX_CONTENT_LENGTH = 64 * 1024   # reject request bodies over 64 KB
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_recycle": 280}
 
 
 class DevelopmentConfig(Config):

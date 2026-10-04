@@ -3,6 +3,7 @@ from marshmallow import ValidationError
 from flask_jwt_extended import get_jwt_identity
 
 from app.extensions import require_role
+from app.extensions import limiter
 from app.utils.pagination import paginate_query
 from app.schemas.tournament_schema import (
     TournamentCreateSchema, TournamentUpdateSchema, TournamentSchema,
@@ -42,6 +43,7 @@ def get_tournament(tournament_id):
 
 
 @tournament_bp.route("/tournaments", methods=["POST"])
+@limiter.limit("10 per minute; 100 per day")
 @require_role("ORGANIZER")
 def post_tournament():
     try:

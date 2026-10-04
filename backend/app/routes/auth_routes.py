@@ -25,7 +25,7 @@ reset_password_schema = ResetPasswordSchema()
 tournament_list_schema = TournamentSchema(many=True)
 
 @auth_bp.route("/auth/register", methods=["POST"])
-@limiter.limit("20 per minute")
+@limiter.limit("5 per minute")
 def register():
     try:
         data = register_schema.load(request.get_json() or {})

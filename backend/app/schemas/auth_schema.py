@@ -6,7 +6,7 @@ from app.constants.enums import UserRole, ParticipationType
 class RegisterSchema(Schema):
     name = fields.Str(required=True, validate=validate.Length(min=1, max=120))
     email = fields.Email(required=True)
-    password = fields.Str(required=True, validate=validate.Length(min=8))
+    password = fields.Str(required=True, validate=validate.Length(min=8, max=128))
     role = fields.Str(required=True, validate=validate.OneOf([r.value for r in UserRole]))
 
     participation_type = fields.Str(
@@ -53,7 +53,7 @@ class RegisterSchema(Schema):
 
 class LoginSchema(Schema):
     email = fields.Email(required=True)
-    password = fields.Str(required=True)
+    password = fields.Str(required=True, validate=validate.Length(max=128))
 
 
 class ForgotPasswordSchema(Schema):
@@ -62,7 +62,7 @@ class ForgotPasswordSchema(Schema):
 
 class ResetPasswordSchema(Schema):
     token = fields.Str(required=True)
-    new_password = fields.Str(required=True, validate=validate.Length(min=8))
+    new_password = fields.Str(required=True, validate=validate.Length(min=8, max=128))
 
 
 class UserSchema(Schema):

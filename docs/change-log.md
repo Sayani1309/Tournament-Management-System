@@ -10,6 +10,7 @@ CR-008"). Relative ordering below (008 newest → 001 oldest) reflects the order
 SRS's own §18 Change History table lists them in, not confirmed calendar dates.
 
 ---
+## CR-010 - It covers the input size limits (description 2000 characters, request body 64 KB, passwords 128 characters), the tournament-creation rate limit (10 per minute, 100 per day), and the database connection pre-ping.
 
 ## CR-009 — Roster-snapshot-based achievement attribution
 
