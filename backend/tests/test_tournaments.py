@@ -259,3 +259,32 @@ def test_update_cannot_move_end_before_existing_start(client):
     bad = client.put(f"/api/v1/tournaments/{tid}", json={"end_date": "2027-01-01"},
                      headers=auth_headers(token))
     assert bad.status_code == 400
+
+
+def test_start_date_in_past_rejected(client):
+    from datetime import date, timedelta
+    token = register_and_login(client, "pastorg1@example.com", "ORGANIZER")
+    two_days_ago = (date.today() - timedelta(days=2)).isoformat()
+    res = client.post("/api/v1/tournaments", json=_date_payload(start_date=two_days_ago),
+                      headers=auth_headers(token))
+    assert res.status_code == 400
+
+
+def test_start_date_today_or_future_accepted(client):
+    from datetime import date, timedelta
+    token = register_and_login(client, "pastorg2@example.com", "ORGANIZER")
+    for d in (date.today(), date.today() + timedelta(days=3)):
+        res = client.post("/api/v1/tournaments", json=_date_payload(start_date=d.isoformat()),
+                          headers=auth_headers(token))
+        assert res.status_code == 201
+
+
+def test_update_start_date_to_past_rejected(client):
+    from datetime import date, timedelta
+    token = register_and_login(client, "pastorg3@example.com", "ORGANIZER")
+    tid = client.post("/api/v1/tournaments", json=_date_payload(),
+                      headers=auth_headers(token)).get_json()["id"]
+    res = client.put(f"/api/v1/tournaments/{tid}",
+                     json={"start_date": (date.today() - timedelta(days=2)).isoformat()},
+                     headers=auth_headers(token))
+    assert res.status_code == 400

@@ -12,6 +12,12 @@ class TournamentError(Exception):
         self.status_code = status_code
 
 
+def _check_not_in_past(start_date):
+    """A tournament cannot be set to start before today (UTC date)."""
+    if start_date and start_date < datetime.now(timezone.utc).date():
+        raise TournamentError("start_date cannot be in the past", status_code=400)
+
+
 def _check_date_order(start_date, end_date):
     if start_date and end_date and end_date < start_date:
         raise TournamentError("end_date cannot be before start_date", status_code=400)
@@ -51,6 +57,7 @@ def create_tournament(organizer_id: int, name: str, sport: str, format: str,
     except ValueError:
         raise TournamentError(f"Invalid participant_type: {participant_type}")
 
+    _check_not_in_past(start_date)
     _check_date_order(start_date, end_date)
 
     tournament = Tournament(
@@ -94,6 +101,11 @@ def update_tournament(tournament_id: int, organizer_id: int, **fields) -> Tourna
                     status_code=409,
                 )
 
+    # only enforce "not in the past" when the start date is actually being changed,
+    # so running tournaments with an old start date stay editable
+    new_start = fields.get("start_date")
+    if new_start and new_start != tournament.start_date:
+        _check_not_in_past(new_start)
     _check_date_order(
         fields.get("start_date") or tournament.start_date,
         fields.get("end_date") or tournament.end_date,

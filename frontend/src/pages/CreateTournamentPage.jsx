@@ -8,6 +8,12 @@ import ErrorBanner from '../components/common/ErrorBanner';
 import { createTournament } from '../api/tournamentApi';
 import { getErrorMessage } from '../utils/errorMessage';
 
+function todayLocal() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
 export default function CreateTournamentPage() {
   const navigate = useNavigate();
   const [name, setName] = useState('');
@@ -23,6 +29,10 @@ export default function CreateTournamentPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (startDate && startDate < todayLocal()) {
+      setError('Start date cannot be in the past.');
+      return;
+    }
     if (startDate && endDate && endDate < startDate) {
       setError('End date cannot be before start date.');
       return;
@@ -66,6 +76,7 @@ export default function CreateTournamentPage() {
                 label="Start date (optional)"
                 type="date"
                 value={startDate}
+                min={todayLocal()}
                 onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
@@ -74,7 +85,7 @@ export default function CreateTournamentPage() {
                 label="End date (optional)"
                 type="date"
                 value={endDate}
-                min={startDate || undefined}
+                min={startDate || todayLocal()}
                 onChange={(e) => setEndDate(e.target.value)}
               />
             </div>
