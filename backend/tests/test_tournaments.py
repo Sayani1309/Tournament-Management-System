@@ -1,9 +1,3 @@
-import pytest
-from app import create_app
-from app.config import TestingConfig
-from app.extensions import limiter
-
-
 def register_and_login(client, email, role):
     payload = {"name": "Org", "email": email, "password": "password123", "role": role}
     if role == "PLAYER":
@@ -204,6 +198,10 @@ def test_oversized_request_body_rejected(client):
 
 
 # --- Tournament creation rate limit (CR-010) ---
+import pytest
+from app import create_app
+from app.config import TestingConfig
+from app.extensions import limiter
 
 
 @pytest.fixture
@@ -227,3 +225,37 @@ def test_tournament_creation_is_rate_limited(rate_limited_client):
     ]
     assert codes[:10] == [201] * 10
     assert codes[10] == 429
+
+
+def _date_payload(**extra):
+    base = {"name": "Dated Cup", "sport": "Chess", "format": "KNOCKOUT",
+            "participant_type": "INDIVIDUAL"}
+    base.update(extra)
+    return base
+
+
+def test_end_date_before_start_date_rejected(client):
+    token = register_and_login(client, "dateorg1@example.com", "ORGANIZER")
+    res = client.post("/api/v1/tournaments",
+                      json=_date_payload(start_date="2027-01-05", end_date="2027-01-02"),
+                      headers=auth_headers(token))
+    assert res.status_code == 400
+
+
+def test_valid_and_same_day_dates_accepted(client):
+    token = register_and_login(client, "dateorg2@example.com", "ORGANIZER")
+    for s, e in (("2027-01-02", "2027-01-05"), ("2027-01-02", "2027-01-02")):
+        res = client.post("/api/v1/tournaments", json=_date_payload(start_date=s, end_date=e),
+                          headers=auth_headers(token))
+        assert res.status_code == 201
+
+
+def test_update_cannot_move_end_before_existing_start(client):
+    token = register_and_login(client, "dateorg3@example.com", "ORGANIZER")
+    res = client.post("/api/v1/tournaments",
+                      json=_date_payload(start_date="2027-01-05", end_date="2027-01-09"),
+                      headers=auth_headers(token))
+    tid = res.get_json()["id"]
+    bad = client.put(f"/api/v1/tournaments/{tid}", json={"end_date": "2027-01-01"},
+                     headers=auth_headers(token))
+    assert bad.status_code == 400

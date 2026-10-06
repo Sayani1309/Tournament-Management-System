@@ -14,6 +14,8 @@ export default function CreateTournamentPage() {
   const [description, setDescription] = useState('');
   const [sport, setSport] = useState('');
   const [format, setFormat] = useState('ROUND_ROBIN');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [participantType, setParticipantType] = useState('INDIVIDUAL');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -21,6 +23,10 @@ export default function CreateTournamentPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    if (startDate && endDate && endDate < startDate) {
+      setError('End date cannot be before start date.');
+      return;
+    }
     setLoading(true);
     try {
       const res = await createTournament({
@@ -29,6 +35,8 @@ export default function CreateTournamentPage() {
         sport,
         format,
         participant_type: participantType,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
       });
       navigate(`/organizer/tournaments/${res.data.id}`);
     } catch (err) {
@@ -51,6 +59,26 @@ export default function CreateTournamentPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
+
+          <div className="flex gap-4">
+            <div className="flex-1">
+              <TextInput
+                label="Start date (optional)"
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="flex-1">
+              <TextInput
+                label="End date (optional)"
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </div>
 
           <div className="mb-4">
             <label className="block text-text-secondary text-sm mb-2">Format</label>

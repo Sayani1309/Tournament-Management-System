@@ -12,6 +12,11 @@ class TournamentError(Exception):
         self.status_code = status_code
 
 
+def _check_date_order(start_date, end_date):
+    if start_date and end_date and end_date < start_date:
+        raise TournamentError("end_date cannot be before start_date", status_code=400)
+
+
 class InvalidTransitionError(TournamentError):
     def __init__(self, current, target):
         super().__init__(
@@ -45,6 +50,8 @@ def create_tournament(organizer_id: int, name: str, sport: str, format: str,
         participant_type_enum = ParticipationType(participant_type)
     except ValueError:
         raise TournamentError(f"Invalid participant_type: {participant_type}")
+
+    _check_date_order(start_date, end_date)
 
     tournament = Tournament(
         organizer_id=organizer_id,
@@ -86,6 +93,11 @@ def update_tournament(tournament_id: int, organizer_id: int, **fields) -> Tourna
                     f"'{locked_field}' cannot be changed after tournament leaves DRAFT",
                     status_code=409,
                 )
+
+    _check_date_order(
+        fields.get("start_date") or tournament.start_date,
+        fields.get("end_date") or tournament.end_date,
+    )
 
     for key, value in fields.items():
         if value is None:

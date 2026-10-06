@@ -119,6 +119,12 @@ export default function TournamentDetailPage() {
         <p className="text-text-secondary">
           {tournament.sport} · {tournament.format.replace('_', ' ')} · {tournament.participant_type}
         </p>
+        {(tournament.start_date || tournament.end_date) && (
+          <p className="text-text-secondary mt-1">
+            {tournament.start_date || 'TBA'}
+            {tournament.end_date ? ` → ${tournament.end_date}` : ''}
+          </p>
+        )}
         {tournament.description && (
           <p className="text-text-primary mt-3">{tournament.description}</p>
         )}
